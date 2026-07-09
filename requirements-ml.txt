@@ -1,0 +1,11 @@
+# Optional dependencies for real MLLM embedding extraction.
+#
+# Install PyTorch separately so the CUDA/CPU wheel matches the machine.
+# On this workspace, the tested command is:
+#   python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+# Then install the model/extraction stack below:
+transformers
+accelerate
+qwen-vl-utils
+pandas

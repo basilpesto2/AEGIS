@@ -1,0 +1,45 @@
+{
+  "calibration": {
+    "criteria": {
+      "max_false_positive_rate": 0.01,
+      "min_recall": 0.9,
+      "review_margin": 0.05
+    },
+    "false_positive_rate": 0.0,
+    "feasible": true,
+    "metrics": {
+      "auprc": 1.0,
+      "auroc": 1.0,
+      "f1": 1.0,
+      "fn": 0.0,
+      "fp": 0.0,
+      "fpr95": 0.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tn": 90.0,
+      "tp": 90.0
+    },
+    "n_benign": 90,
+    "n_malicious": 90,
+    "n_samples": 180,
+    "review_margin": 0.05,
+    "threshold": 0.9095461771950458
+  },
+  "detector": "models\\aegis\\aegis_llava_onevision_05b_text_detector.npz",
+  "logging": {
+    "store_actions": true,
+    "store_image_sha256": false,
+    "store_prompt_sha256": true,
+    "store_raw_prompts": false,
+    "store_scores": true
+  },
+  "name": "llava-onevision-05b-controlled-policy",
+  "policy": {
+    "action_on_error": "review",
+    "block_threshold": 0.9095461771950458,
+    "hash_images": false,
+    "require_matching_provenance": true,
+    "review_margin": 0.05
+  },
+  "schema_version": 1
+}
