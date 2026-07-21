@@ -5,6 +5,9 @@ runs before the protected model, converts text and images into hidden-state feat
 scores them with a small detector, and returns an `allow`, `review`, or `block`
 recommendation through an HTTP API.
 
+The deliverable artifacts—pipeline, red-teaming tools, annotated benchmark,
+and ablation report—are organized under [`deliverables/`](deliverables/README.md).
+
 AEGIS ships with two model-specific targets:
 
 | Target | Input | Minimum host resources |

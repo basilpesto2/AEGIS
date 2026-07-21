@@ -1,0 +1,11 @@
+{
+  "seed": 42,
+  "learning_rate": 0.05,
+  "epochs": 800,
+  "l2": 0.001,
+  "threshold_selection": "validation_max_f1_then_precision",
+  "trusted_per_class": null,
+  "pseudo_per_class": 0,
+  "pseudo_low": 0.15,
+  "pseudo_high": 0.85
+}

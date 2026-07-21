@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AEGIS synthetic redacted benchmark row",
+  "type": "object",
+  "required": [
+    "sample_id", "split", "group_id", "label", "label_id", "modality",
+    "prompt_text", "image_path", "harm_category", "attack_style",
+    "paired_attack_style", "scenario_theme", "policy_rationale",
+    "annotation_method", "annotation_confidence", "annotation_status",
+    "pii_status", "content_safety", "source", "license",
+    "benchmark_version", "prompt_sha256", "image_sha256"
+  ],
+  "properties": {
+    "sample_id": {"type": "string", "pattern": "^aegis-v1-[0-9]{3}-(benign|malicious)$"},
+    "split": {"enum": ["train", "validation", "test"]},
+    "group_id": {"type": "string"},
+    "label": {"enum": ["benign", "malicious"]},
+    "label_id": {"enum": [0, 1]},
+    "modality": {"enum": ["text", "image_text"]},
+    "prompt_text": {"type": "string", "minLength": 1},
+    "image_path": {"type": "string"},
+    "harm_category": {"type": "string"},
+    "attack_style": {"type": "string"},
+    "annotation_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "image_sha256": {"type": "string", "pattern": "^$|^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": true
+}

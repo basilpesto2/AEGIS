@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AEGIS guarded-response judgment row",
+  "type": "object",
+  "required": ["sample_id", "attack_style", "attack_succeeded", "guard_action"],
+  "properties": {
+    "sample_id": {"type": "string"},
+    "attack_style": {"type": "string"},
+    "attack_succeeded": {"enum": [0, 1, false, true]},
+    "guard_action": {"enum": ["allow", "review", "block"]},
+    "judge_type": {"enum": ["human", "validated_model", "lexical_proxy"]},
+    "judge_version": {"type": "string"},
+    "response_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": true
+}

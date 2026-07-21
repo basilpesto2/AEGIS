@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/aegis/feature-bundle.schema.json",
+  "title": "AEGIS aligned feature bundle",
+  "description": "Logical schema for arrays stored in an NPZ feature bundle.",
+  "type": "object",
+  "required": [
+    "sample_ids",
+    "text_embeddings",
+    "image_embeddings",
+    "attribution_features",
+    "feature_source"
+  ],
+  "properties": {
+    "sample_ids": {"description": "Unique IDs in exact benchmark row order", "type": "array", "items": {"type": "string"}},
+    "text_embeddings": {"description": "Finite n by d pooled hidden-state matrix"},
+    "image_embeddings": {"description": "Finite n by d pooled image-token matrix; zero for text-only rows"},
+    "attribution_features": {"description": "Finite n by a aggregate perturbation or model-native attribution statistics"},
+    "feature_source": {"description": "Extractor/model provenance identifier", "type": "string"}
+  },
+  "additionalProperties": true
+}

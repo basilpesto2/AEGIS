@@ -1,0 +1,13 @@
+{
+  "asset_root": "deliverables\\red_teaming\\generated",
+  "attribution_dimension": 8,
+  "bundle_sha256": "f6a3ba6d712289b395737041c4fa25afebbb1ed3d4bd053a509a239fb5fe2b5c",
+  "extractor": "deliverables\\reproducible_pipeline\\scripts\\build_smoke_features.py",
+  "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
+  "id_column": "variant_id",
+  "image_dimension": 32,
+  "metadata_sha256": "c807e6d12676a367783165ecd950bff8c2eca7f3b357e8e3dd47a8c0c5458ba7",
+  "purpose": "end-to-end software verification only",
+  "rows": 48,
+  "text_dimension": 32
+}

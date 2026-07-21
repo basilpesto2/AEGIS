@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-research-deliverable"
+version = "1.0.0"
+description = "Reproducible representation-space detector experiments for AEGIS"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "Pillow>=9.0"]
+
+[tool.setuptools.packages.find]
+include = ["aegis_research*"]

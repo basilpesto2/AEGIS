@@ -1,0 +1,17 @@
+feature_view,held_out_attack_style,n_test,n,prevalence,threshold,auroc,auprc,precision,recall,f1,false_positive_rate,true_positives,false_positives,true_negatives,false_negatives
+text_representation,cross_modal_misalignment,8,8.0,0.5,0.7480246449011867,0.9375,0.95,0.75,0.75,0.75,0.25,3.0,1.0,3.0,1.0
+text_representation,direct_policy_violation,8,8.0,0.5,0.45761592017081737,1.0,1.0,0.8,1.0,0.888888888888889,0.25,4.0,1.0,3.0,0.0
+text_representation,image_embedded_instruction,8,8.0,0.5,0.18539320236864978,0.5,0.7321428571428572,0.6666666666666666,0.5,0.5714285714285715,0.25,2.0,1.0,3.0,2.0
+text_representation,indirect_prompt_injection,8,8.0,0.5,0.7440951760779655,0.6875,0.7928571428571428,1.0,0.25,0.4,0.0,1.0,0.0,4.0,3.0
+text_representation,instruction_hierarchy,8,8.0,0.5,0.14038210128185993,0.9375,0.95,0.8,1.0,0.888888888888889,0.25,4.0,1.0,3.0,0.0
+text_representation,role_play,8,8.0,0.5,0.30950336495452624,0.9375,0.95,1.0,0.75,0.8571428571428571,0.0,3.0,0.0,4.0,1.0
+text_representation,safety_camouflage,8,8.0,0.5,0.17160735448838169,1.0,1.0,0.8,1.0,0.888888888888889,0.25,4.0,1.0,3.0,0.0
+text_representation,text_obfuscation,8,8.0,0.5,0.3714254286243175,0.9375,0.95,0.8,1.0,0.888888888888889,0.25,4.0,1.0,3.0,0.0
+all_input_signals,cross_modal_misalignment,8,8.0,0.5,0.9656277736347237,1.0,1.0,1.0,1.0,1.0,0.0,4.0,0.0,4.0,0.0
+all_input_signals,direct_policy_violation,8,8.0,0.5,0.9391804729014518,1.0,1.0,1.0,1.0,1.0,0.0,4.0,0.0,4.0,0.0
+all_input_signals,image_embedded_instruction,8,8.0,0.5,0.7648633985095982,0.8125,0.8541666666666666,0.0,0.0,0.0,0.0,0.0,0.0,4.0,4.0
+all_input_signals,indirect_prompt_injection,8,8.0,0.5,0.9841699397090823,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,4.0,4.0
+all_input_signals,instruction_hierarchy,8,8.0,0.5,0.8859199904475006,1.0,1.0,0.8,1.0,0.888888888888889,0.25,4.0,1.0,3.0,0.0
+all_input_signals,role_play,8,8.0,0.5,0.9392205442934304,1.0,1.0,1.0,0.5,0.6666666666666666,0.0,2.0,0.0,4.0,2.0
+all_input_signals,safety_camouflage,8,8.0,0.5,0.9305963773531597,1.0,1.0,1.0,1.0,1.0,0.0,4.0,0.0,4.0,0.0
+all_input_signals,text_obfuscation,8,8.0,0.5,0.9686432419407888,1.0,1.0,1.0,1.0,1.0,0.0,4.0,0.0,4.0,0.0

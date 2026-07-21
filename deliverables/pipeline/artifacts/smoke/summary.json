@@ -1,0 +1,33 @@
+{
+  "config": {
+    "epochs": 800,
+    "l2": 0.001,
+    "learning_rate": 0.05,
+    "pseudo_high": 0.85,
+    "pseudo_low": 0.15,
+    "pseudo_per_class": 0,
+    "seed": 42,
+    "trusted_per_class": null
+  },
+  "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
+  "features": "deliverables\\reproducible_pipeline\\fixtures\\smoke_features.npz",
+  "limitations": "deterministic_smoke_fixture results verify software only",
+  "metadata": "deliverables\\annotated_benchmark\\data\\benchmark.csv",
+  "selected_feature_view": "attribution",
+  "selected_test_metrics": {
+    "auprc": 1.0,
+    "auroc": 1.0,
+    "f1": 0.9411764705882353,
+    "false_negatives": 0.0,
+    "false_positive_rate": 0.125,
+    "false_positives": 1.0,
+    "n": 16.0,
+    "precision": 0.8888888888888888,
+    "prevalence": 0.5,
+    "recall": 1.0,
+    "threshold": 0.8202568457258909,
+    "true_negatives": 7.0,
+    "true_positives": 8.0
+  },
+  "selection_rule": "maximum validation AUPRC then AUROC; test metrics are not used for selection"
+}

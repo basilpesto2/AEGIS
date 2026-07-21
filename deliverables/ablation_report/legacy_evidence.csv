@@ -1,0 +1,13 @@
+evidence_id,model,dataset,rows,metric,value,source_commit,verification_status,limitation
+legacy_qwen_litmus_auroc,Qwen2.5-VL-3B,AEGIS multimodal litmus,32,auroc,0.98828,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_qwen_litmus_auprc,Qwen2.5-VL-3B,AEGIS multimodal litmus,32,auprc,0.99013,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_qwen_litmus_precision,Qwen2.5-VL-3B,AEGIS multimodal litmus,32,precision,1.0,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_qwen_litmus_recall,Qwen2.5-VL-3B,AEGIS multimodal litmus,32,recall,0.9375,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_llava_jailbreakv_auroc,LLaVA-OneVision-0.5B,JailBreakV image-matched holdout,180,auroc,1.0,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_llava_jailbreakv_auprc,LLaVA-OneVision-0.5B,JailBreakV image-matched holdout,180,auprc,1.0,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_llava_jailbreakv_precision,LLaVA-OneVision-0.5B,JailBreakV image-matched holdout,180,precision,1.0,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_llava_jailbreakv_recall,LLaVA-OneVision-0.5B,JailBreakV image-matched holdout,180,recall,0.98889,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_mssbench_supervised_auroc,Qwen2.5-VL-3B,MSSBench full,,auroc,0.97613,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_mssbench_supervised_auprc,Qwen2.5-VL-3B,MSSBench full,,auprc,0.97237,3f6e46a,legacy_report_only,Underlying ignored output is absent from current repository
+legacy_adaptive_recall_base,Qwen2.5-VL-3B,JailBreakV paired test,,recall,0.98889,3f6e46a,legacy_report_only,Ten-query adaptive result used a bounded score-query protocol
+legacy_adaptive_recall_ten_query,Qwen2.5-VL-3B,JailBreakV paired test,,recall,0.96667,3f6e46a,legacy_report_only,Ten-query adaptive result used a bounded score-query protocol

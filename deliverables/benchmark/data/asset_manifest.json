@@ -1,0 +1,29 @@
+{
+  "benchmark_version": "1.0.0",
+  "image_count": 44,
+  "label_counts": {
+    "benign": 32,
+    "malicious": 32
+  },
+  "malicious_attack_style_counts": {
+    "cross_modal_misalignment": 4,
+    "direct_policy_violation": 4,
+    "image_embedded_instruction": 4,
+    "indirect_prompt_injection": 4,
+    "instruction_hierarchy": 4,
+    "role_play": 4,
+    "safety_camouflage": 4,
+    "text_obfuscation": 4
+  },
+  "modality_counts": {
+    "image_text": 44,
+    "text": 20
+  },
+  "rows": 64,
+  "rows_json_sha256": "da5087298f4da5b1ef9503908de738bc8bbb4e1295f32c3ff74f4b53ba1ce7b3",
+  "split_counts": {
+    "test": 16,
+    "train": 32,
+    "validation": 16
+  }
+}

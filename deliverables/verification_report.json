@@ -1,0 +1,179 @@
+{
+  "checks": [
+    {
+      "name": "deliverable_subdirectories",
+      "passed": true
+    },
+    {
+      "detail": 64,
+      "name": "benchmark_row_count_64",
+      "passed": true
+    },
+    {
+      "name": "benchmark_balanced",
+      "passed": true
+    },
+    {
+      "name": "benchmark_split_balance",
+      "passed": true
+    },
+    {
+      "name": "benchmark_unique_ids",
+      "passed": true
+    },
+    {
+      "name": "benchmark_unique_prompt_hashes",
+      "passed": true
+    },
+    {
+      "detail": 32,
+      "name": "benchmark_pair_group_isolation",
+      "passed": true
+    },
+    {
+      "detail": {
+        "cross_modal_misalignment": 4,
+        "direct_policy_violation": 4,
+        "image_embedded_instruction": 4,
+        "indirect_prompt_injection": 4,
+        "instruction_hierarchy": 4,
+        "role_play": 4,
+        "safety_camouflage": 4,
+        "text_obfuscation": 4
+      },
+      "name": "benchmark_eight_attack_styles",
+      "passed": true
+    },
+    {
+      "name": "benchmark_modalities",
+      "passed": true
+    },
+    {
+      "detail": 44,
+      "name": "benchmark_content_hashes",
+      "passed": true
+    },
+    {
+      "name": "benchmark_csv_json_alignment",
+      "passed": true
+    },
+    {
+      "name": "benchmark_workbook_exists",
+      "passed": true
+    },
+    {
+      "name": "benchmark_workbook_formula_scan",
+      "passed": true
+    },
+    {
+      "detail": 48,
+      "name": "redteam_variant_rows_48",
+      "passed": true
+    },
+    {
+      "detail": {
+        "aegis-v1-004-malicious": 6,
+        "aegis-v1-008-malicious": 6,
+        "aegis-v1-012-malicious": 6,
+        "aegis-v1-016-malicious": 6,
+        "aegis-v1-020-malicious": 6,
+        "aegis-v1-024-malicious": 6,
+        "aegis-v1-028-malicious": 6,
+        "aegis-v1-032-malicious": 6
+      },
+      "name": "redteam_six_variants_per_sample",
+      "passed": true
+    },
+    {
+      "name": "redteam_variant_families",
+      "passed": true
+    },
+    {
+      "name": "redteam_content_hashes",
+      "passed": true
+    },
+    {
+      "name": "redteam_scored_alignment",
+      "passed": true
+    },
+    {
+      "name": "redteam_bounded_adaptive_budgets",
+      "passed": true
+    },
+    {
+      "detail": [
+        0.25,
+        0.625,
+        1.0
+      ],
+      "name": "redteam_adaptive_monotonic",
+      "passed": true
+    },
+    {
+      "name": "redteam_attack_success_evaluator",
+      "passed": true
+    },
+    {
+      "name": "pipeline_feature_alignment",
+      "passed": true
+    },
+    {
+      "name": "pipeline_feature_shapes",
+      "passed": true
+    },
+    {
+      "name": "pipeline_smoke_label",
+      "passed": true
+    },
+    {
+      "name": "pipeline_detector_artifact",
+      "passed": true
+    },
+    {
+      "name": "pipeline_validation_only_selection_documented",
+      "passed": true
+    },
+    {
+      "name": "pipeline_mllm_extractor",
+      "passed": true
+    },
+    {
+      "name": "ablation_seven_signal_views",
+      "passed": true
+    },
+    {
+      "name": "ablation_low_label_seed_sweep",
+      "passed": true
+    },
+    {
+      "name": "ablation_sixteen_transfer_rows",
+      "passed": true
+    },
+    {
+      "name": "ablation_uncertainty_coverage",
+      "passed": true
+    },
+    {
+      "name": "ablation_adaptive_results",
+      "passed": true
+    },
+    {
+      "name": "ablation_report_sections",
+      "passed": true
+    },
+    {
+      "name": "ablation_smoke_disclaimer",
+      "passed": true
+    },
+    {
+      "detail": 18,
+      "name": "python_syntax",
+      "passed": true
+    }
+  ],
+  "checks_passed": 35,
+  "checks_total": 35,
+  "manifest_files": 118,
+  "manifest_total_bytes": 2028054,
+  "status": "pass"
+}
