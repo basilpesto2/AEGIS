@@ -189,7 +189,7 @@ _TARGET_PROFILES = {
         inference_timeout_seconds=120.0,
         worker_startup_timeout_seconds=600.0,
         resources={
-            "min_total_physical_bytes": 8589934592,
+            "min_total_physical_bytes": 8000000000,
             "min_available_physical_bytes": 2147483648,
             "min_available_virtual_bytes": 4294967296,
             "min_disk_free_bytes": 4294967296,

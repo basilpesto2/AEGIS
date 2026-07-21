@@ -61,7 +61,7 @@
     "min_cuda_device_memory_bytes": 2684354560,
     "min_disk_free_bytes": 4294967296,
     "min_model_cache_bytes": 1610612736,
-    "min_total_physical_bytes": 8589934592
+    "min_total_physical_bytes": 8000000000
   },
   "schema_version": 1,
   "target_profile": "llava05b",
