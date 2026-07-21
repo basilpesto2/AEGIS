@@ -1,0 +1,9 @@
+# Direct runtime versions verified in the July 2026 AEGIS workspace.
+# PyTorch is installed separately so the wheel matches the deployment device.
+accelerate==1.14.0
+huggingface-hub==1.19.0
+numpy==2.4.4
+pandas==3.0.3
+Pillow==12.2.0
+qwen-vl-utils==0.0.14
+transformers==5.12.0

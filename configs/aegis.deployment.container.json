@@ -1,0 +1,79 @@
+{
+  "base_dir": "..",
+  "traffic_mode": "shadow",
+  "evidence_session_mode": "runtime",
+  "audit": {
+    "path": "/var/lib/aegis/audit/aegis-shadow-{evidence_session_id}.jsonl",
+    "max_bytes": 104857600,
+    "backup_count": 5,
+    "fsync": false
+  },
+  "cache_dir": "/app/models/huggingface",
+  "detector": "models/aegis/aegis_qwen25vl3b_text_detector.npz",
+  "name": "aegis-qwen25vl3b-container",
+  "policy": {
+    "action_on_error": "review",
+    "block_threshold": null,
+    "review_threshold": null,
+    "hash_images": true,
+    "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
+    "require_matching_provenance": true,
+    "review_margin": null
+  },
+  "provider": "AEGIS.providers:Qwen25VLGuardrailProvider",
+  "provider_options": {
+    "cache_requests": true,
+    "device_map": "auto",
+    "environment_overrides": false,
+    "local_files_only": true,
+    "feature_dim": 2048,
+    "layer": -1,
+    "max_pixels": 200704,
+    "min_pixels": null,
+    "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "pooling": "text_tokens",
+    "request_cache_max_entries": 128,
+    "request_cache_ttl_seconds": 300.0,
+    "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "torch_dtype": "auto"
+  },
+  "request_limits": {
+    "allow_local_image_paths": false,
+    "allowed_image_media_types": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ],
+    "allowed_image_root": null,
+    "max_batch_size": 8,
+    "max_image_bytes": 10485760,
+    "max_image_pixels": 20000000,
+    "max_images_per_request": 1,
+    "max_request_id_characters": 256,
+    "max_text_characters": 32768
+  },
+  "require_model_cache": true,
+  "require_cuda": true,
+  "resources": {
+    "min_available_physical_bytes": 6442450944,
+    "min_available_virtual_bytes": 8589934592,
+    "min_cuda_device_memory_bytes": 7516192768,
+    "min_disk_free_bytes": 12884901888,
+    "min_model_cache_bytes": 6442450944,
+    "min_total_physical_bytes": 16106127360
+  },
+  "schema_version": 1,
+  "target_profile": "qwen25vl3b",
+  "server": {
+    "api_token_env": "AEGIS_API_TOKEN",
+    "host": "0.0.0.0",
+    "inference_timeout_seconds": 120.0,
+    "max_body_bytes": 12582912,
+    "max_concurrent_requests": 1,
+    "port": 8766,
+    "worker_mode": "process",
+    "worker_startup_timeout_seconds": 900.0
+  },
+  "warmup_request_json": "configs/service_warmup_request.example.json"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from collections.abc import Sequence
 from typing import Literal
@@ -9,6 +10,8 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
+from AEGIS.provenance import preprocessing_fingerprint
+
 
 PoolingMode = Literal["last_token", "mean_tokens", "text_tokens", "image_tokens"]
 
@@ -16,6 +19,8 @@ PoolingMode = Literal["last_token", "mean_tokens", "text_tokens", "image_tokens"
 @dataclass(frozen=True)
 class Qwen25VLExtractionConfig:
     model_id: str = "Qwen/Qwen2.5-VL-3B-Instruct"
+    model_revision: str | None = None
+    tokenizer_revision: str | None = None
     cache_dir: str | None = "models/huggingface"
     layer: int = -1
     pooling: PoolingMode = "last_token"
@@ -25,6 +30,7 @@ class Qwen25VLExtractionConfig:
     min_pixels: int | None = None
     max_pixels: int | None = None
     max_samples: int | None = None
+    local_files_only: bool = False
 
 
 def extract_qwen25_vl_layer_embeddings(
@@ -61,6 +67,9 @@ def extract_qwen25_vl_layer_embeddings(
             embeddings=np.vstack(arrays[layer]).astype(np.float32),
             sample_ids=sample_ids,
             model_id=config.model_id,
+            model_revision=config.model_revision,
+            tokenizer_revision=config.tokenizer_revision,
+            preprocessing_sha256=qwen_preprocessing_sha256(config),
             layer=layer,
             pooling=config.pooling,
         )
@@ -98,6 +107,9 @@ def extract_qwen25_vl_pooling_embeddings(
             embeddings=np.vstack(arrays[(config.layer, pooling)]).astype(np.float32),
             sample_ids=sample_ids,
             model_id=config.model_id,
+            model_revision=config.model_revision,
+            tokenizer_revision=config.tokenizer_revision,
+            preprocessing_sha256=qwen_preprocessing_sha256(config),
             layer=config.layer,
             pooling=pooling,
         )
@@ -129,6 +141,9 @@ def extract_qwen25_vl_embeddings(
         embeddings=np.vstack(arrays[config.layer]).astype(np.float32),
         sample_ids=sample_ids,
         model_id=config.model_id,
+        model_revision=config.model_revision,
+        tokenizer_revision=config.tokenizer_revision,
+        preprocessing_sha256=qwen_preprocessing_sha256(config),
         layer=config.layer,
         pooling=config.pooling,
     )
@@ -160,7 +175,6 @@ def _extract_qwen25_vl_feature_arrays(
     layers: Sequence[int],
     poolings: Sequence[PoolingMode],
 ) -> tuple[dict[tuple[int, PoolingMode], list[np.ndarray]], list[str]]:
-    torch, AutoProcessor, QwenModel, process_vision_info = _load_qwen_dependencies()
     layer_ids = _normalize_layers(layers)
     pooling_ids = _normalize_poolings(poolings)
 
@@ -173,25 +187,17 @@ def _extract_qwen25_vl_feature_arrays(
     if config.max_samples is not None:
         metadata = metadata.head(config.max_samples).copy()
 
-    processor_kwargs = {}
-    if config.min_pixels is not None:
-        processor_kwargs["min_pixels"] = config.min_pixels
-    if config.max_pixels is not None:
-        processor_kwargs["max_pixels"] = config.max_pixels
-
-    processor = AutoProcessor.from_pretrained(
+    torch, processor, model, special_token_ids, process_vision_info = _load_qwen_runtime(
         config.model_id,
-        cache_dir=config.cache_dir,
-        **processor_kwargs,
+        config.cache_dir,
+        config.torch_dtype,
+        config.device_map,
+        config.min_pixels,
+        config.max_pixels,
+        config.model_revision,
+        config.tokenizer_revision,
+        config.local_files_only,
     )
-    special_token_ids = _qwen_special_token_ids(processor)
-    model = QwenModel.from_pretrained(
-        config.model_id,
-        torch_dtype=config.torch_dtype,
-        device_map=config.device_map,
-        cache_dir=config.cache_dir,
-    )
-    model.eval()
 
     root = Path(corpus_root)
     embeddings_by_feature: dict[tuple[int, PoolingMode], list[np.ndarray]] = {
@@ -242,11 +248,62 @@ def _extract_qwen25_vl_feature_arrays(
     return embeddings_by_feature, sample_ids
 
 
+@lru_cache(maxsize=4)
+def _load_qwen_runtime(
+    model_id: str,
+    cache_dir: str | None,
+    torch_dtype: str,
+    device_map: str,
+    min_pixels: int | None,
+    max_pixels: int | None,
+    model_revision: str | None,
+    tokenizer_revision: str | None,
+    local_files_only: bool = False,
+):
+    """Load and retain one Qwen runtime per model/preprocessing configuration."""
+    torch, AutoProcessor, QwenModel, process_vision_info = _load_qwen_dependencies()
+    processor_kwargs = {}
+    if min_pixels is not None:
+        processor_kwargs["min_pixels"] = min_pixels
+    if max_pixels is not None:
+        processor_kwargs["max_pixels"] = max_pixels
+    processor = AutoProcessor.from_pretrained(
+        model_id,
+        cache_dir=cache_dir,
+        revision=tokenizer_revision or model_revision,
+        local_files_only=local_files_only,
+        **processor_kwargs,
+    )
+    model = QwenModel.from_pretrained(
+        model_id,
+        torch_dtype=torch_dtype,
+        device_map=device_map,
+        cache_dir=cache_dir,
+        revision=model_revision,
+        local_files_only=local_files_only,
+        low_cpu_mem_usage=True,
+    )
+    model.eval()
+    return torch, processor, model, _qwen_special_token_ids(processor), process_vision_info
+
+
+def clear_qwen_runtime_cache() -> None:
+    """Release cached Qwen runtime references during shutdown or tests."""
+    _load_qwen_runtime.cache_clear()
+
+
+def qwen_runtime_cache_info() -> dict[str, int]:
+    return dict(_load_qwen_runtime.cache_info()._asdict())
+
+
 def _save_embedding_npz(
     output_path: str | Path,
     embeddings: np.ndarray,
     sample_ids: Sequence[str],
     model_id: str,
+    model_revision: str | None,
+    tokenizer_revision: str | None,
+    preprocessing_sha256: str,
     layer: int,
     pooling: PoolingMode,
 ) -> None:
@@ -257,8 +314,24 @@ def _save_embedding_npz(
         embeddings=embeddings,
         sample_id=np.asarray(sample_ids),
         model_id=np.asarray([model_id]),
+        model_family=np.asarray(["qwen25_vl"]),
+        model_revision=np.asarray([model_revision or ""]),
+        tokenizer_revision=np.asarray([tokenizer_revision or model_revision or ""]),
+        preprocessing_sha256=np.asarray([preprocessing_sha256]),
         layer=np.asarray([layer]),
         pooling=np.asarray([pooling]),
+    )
+
+
+def qwen_preprocessing_sha256(config: Qwen25VLExtractionConfig) -> str:
+    return preprocessing_fingerprint(
+        "qwen25_vl",
+        adapter_schema=1,
+        add_generation_prompt=config.add_generation_prompt,
+        min_pixels=config.min_pixels,
+        max_pixels=config.max_pixels,
+        padding=True,
+        chat_template=True,
     )
 
 
@@ -399,7 +472,7 @@ def _load_qwen_dependencies():
     except ImportError as exc:
         raise RuntimeError(
             "Qwen2.5-VL extraction requires optional ML dependencies. "
-            "Install them with the packages listed in requirements-ml.txt."
+            "Install them with `python -m pip install 'aegis-mllm-guard[mllm]'`."
         ) from exc
 
     return torch, AutoProcessor, Qwen2_5_VLForConditionalGeneration, process_vision_info

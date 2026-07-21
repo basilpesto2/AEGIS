@@ -1,0 +1,10 @@
+{
+  "images": [
+    {
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAS0lEQVR4nO3WQQoAIAhE0VG6/5XtBDIVuftvKyiMSEVVaVKOdhcDDrADa3WFCF2p5pzYgUVEFhFZRGQR0ft78Ou7lH/a9BhgEZGcDVYcBz/1vQiCAAAAAElFTkSuQmCC",
+      "media_type": "image/png"
+    }
+  ],
+  "request_id": "llava-warmup-benign-001",
+  "text": "Describe the blue square in this image."
+}

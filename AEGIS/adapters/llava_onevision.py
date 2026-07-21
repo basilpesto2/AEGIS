@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import pandas as pd
 from PIL import Image
+
+from AEGIS.provenance import preprocessing_fingerprint
 
 
 PoolingMode = Literal["last_token", "mean_tokens", "text_tokens", "image_tokens"]
@@ -16,6 +19,9 @@ PoolingMode = Literal["last_token", "mean_tokens", "text_tokens", "image_tokens"
 @dataclass(frozen=True)
 class LlavaOnevisionExtractionConfig:
     model_id: str = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
+    runtime_model_id: str | None = None
+    model_revision: str | None = None
+    tokenizer_revision: str | None = None
     cache_dir: str | None = "models/huggingface"
     layer: int = -1
     add_generation_prompt: bool = False
@@ -25,6 +31,7 @@ class LlavaOnevisionExtractionConfig:
     batch_size: int = 1
     max_batch_characters: int | None = None
     max_samples: int | None = None
+    local_files_only: bool = False
 
 
 def extract_llava_onevision_pooling_embeddings(
@@ -56,6 +63,12 @@ def extract_llava_onevision_pooling_embeddings(
             embeddings=np.vstack(arrays[pooling]).astype(np.float32),
             sample_id=np.asarray(sample_ids),
             model_id=np.asarray([config.model_id]),
+            model_family=np.asarray(["llava_onevision"]),
+            model_revision=np.asarray([config.model_revision or ""]),
+            tokenizer_revision=np.asarray(
+                [config.tokenizer_revision or config.model_revision or ""]
+            ),
+            preprocessing_sha256=np.asarray([llava_preprocessing_sha256(config)]),
             layer=np.asarray([config.layer]),
             pooling=np.asarray([pooling]),
         )
@@ -69,7 +82,6 @@ def _extract_arrays(
     config: LlavaOnevisionExtractionConfig,
     poolings: Sequence[PoolingMode],
 ) -> tuple[dict[PoolingMode, list[np.ndarray]], list[str]]:
-    torch, AutoProcessor, LlavaModel = _load_dependencies()
     metadata = pd.read_csv(metadata_path)
     if "sample_id" not in metadata or "text" not in metadata:
         raise ValueError("Metadata must contain 'sample_id' and 'text' columns.")
@@ -78,15 +90,15 @@ def _extract_arrays(
     if config.max_samples is not None:
         metadata = metadata.head(config.max_samples).copy()
 
-    processor = AutoProcessor.from_pretrained(config.model_id, cache_dir=config.cache_dir)
-    model = LlavaModel.from_pretrained(
-        config.model_id,
-        cache_dir=config.cache_dir,
-        torch_dtype=config.torch_dtype,
-        device_map=config.device_map,
-        low_cpu_mem_usage=True,
+    torch, processor, model = _load_llava_runtime(
+        config.runtime_model_id or config.model_id,
+        config.cache_dir,
+        config.torch_dtype,
+        config.device_map,
+        config.model_revision,
+        config.tokenizer_revision,
+        config.local_files_only,
     )
-    model.eval()
     image_token_id = int(model.config.image_token_index)
     root = Path(corpus_root)
     arrays: dict[PoolingMode, list[np.ndarray]] = {pooling: [] for pooling in poolings}
@@ -168,6 +180,58 @@ def _extract_arrays(
                     )
                 sample_ids.append(str(getattr(row, "sample_id")))
     return arrays, sample_ids
+
+
+@lru_cache(maxsize=4)
+def _load_llava_runtime(
+    model_id: str,
+    cache_dir: str | None,
+    torch_dtype: str,
+    device_map: str,
+    model_revision: str | None,
+    tokenizer_revision: str | None,
+    local_files_only: bool = False,
+):
+    """Load and retain one LLaVA runtime per model configuration."""
+    torch, AutoProcessor, LlavaModel = _load_dependencies()
+    processor = AutoProcessor.from_pretrained(
+        model_id,
+        cache_dir=cache_dir,
+        revision=tokenizer_revision or model_revision,
+        local_files_only=local_files_only,
+    )
+    model = LlavaModel.from_pretrained(
+        model_id,
+        cache_dir=cache_dir,
+        torch_dtype=torch_dtype,
+        device_map=device_map,
+        low_cpu_mem_usage=True,
+        revision=model_revision,
+        local_files_only=local_files_only,
+    )
+    model.eval()
+    return torch, processor, model
+
+
+def llava_preprocessing_sha256(config: LlavaOnevisionExtractionConfig) -> str:
+    return preprocessing_fingerprint(
+        "llava_onevision",
+        adapter_schema=1,
+        add_generation_prompt=config.add_generation_prompt,
+        max_image_edge=config.max_image_edge,
+        padding=True,
+        chat_template=True,
+        image_mode="RGB",
+    )
+
+
+def clear_llava_runtime_cache() -> None:
+    """Release cached LLaVA runtime references during shutdown or tests."""
+    _load_llava_runtime.cache_clear()
+
+
+def llava_runtime_cache_info() -> dict[str, int]:
+    return dict(_load_llava_runtime.cache_info()._asdict())
 
 
 def _make_batches(rows, batch_size: int, max_batch_characters: int | None):

@@ -1,5 +1,21 @@
 """Malicious-prompt detection experiments and inference tools."""
 
-__all__ = ["__version__"]
+from AEGIS.client import (
+    GuardedRequest,
+    GuardrailBlocked,
+    GuardrailClient,
+    GuardrailClientError,
+    GuardrailReviewRequired,
+)
 
-__version__ = "0.2.0"
+
+__all__ = [
+    "GuardedRequest",
+    "GuardrailBlocked",
+    "GuardrailClient",
+    "GuardrailClientError",
+    "GuardrailReviewRequired",
+    "__version__",
+]
+
+__version__ = "0.3.0"

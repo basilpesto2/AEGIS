@@ -6,10 +6,16 @@ from pathlib import Path
 import numpy as np
 
 from AEGIS.logistic import LogisticRegressionNumpy
+from AEGIS.provenance import is_sha256
 
 
 ARTIFACT_VERSION = 1
-SUPPORTED_MODEL_FAMILIES = {"qwen25_vl", "llava_onevision", "generic", "custom"}
+SUPPORTED_MODEL_FAMILIES = {
+    "qwen25_vl",
+    "llava_onevision",
+    "generic",
+    "custom",
+}
 
 
 @dataclass
@@ -22,6 +28,9 @@ class DetectorArtifact:
     pooling: str
     uncertainty_margin: float = 0.05
     source: str = ""
+    model_revision: str = ""
+    tokenizer_revision: str = ""
+    preprocessing_sha256: str = ""
 
     def __post_init__(self) -> None:
         if self.model_family not in SUPPORTED_MODEL_FAMILIES:
@@ -30,6 +39,8 @@ class DetectorArtifact:
             raise ValueError("threshold must be between 0 and 1.")
         if not 0.0 <= self.uncertainty_margin < 0.5:
             raise ValueError("uncertainty_margin must be in [0, 0.5).")
+        if self.preprocessing_sha256 and not is_sha256(self.preprocessing_sha256):
+            raise ValueError("preprocessing_sha256 must be an empty string or SHA-256 hex.")
         _require_fitted_classifier(self.classifier)
 
     @property
@@ -92,6 +103,9 @@ def save_detector_artifact(path: str | Path, artifact: DetectorArtifact) -> Path
         layer=np.asarray([artifact.layer], dtype=np.int64),
         pooling=np.asarray([artifact.pooling]),
         source=np.asarray([artifact.source]),
+        model_revision=np.asarray([artifact.model_revision]),
+        tokenizer_revision=np.asarray([artifact.tokenizer_revision]),
+        preprocessing_sha256=np.asarray([artifact.preprocessing_sha256]),
     )
     return output
 
@@ -126,6 +140,9 @@ def load_detector_artifact(path: str | Path) -> DetectorArtifact:
             layer=_scalar_int(data, "layer"),
             pooling=_scalar_string(data, "pooling"),
             source=_scalar_string(data, "source"),
+            model_revision=_optional_scalar_string(data, "model_revision"),
+            tokenizer_revision=_optional_scalar_string(data, "tokenizer_revision"),
+            preprocessing_sha256=_optional_scalar_string(data, "preprocessing_sha256"),
         )
 
 
@@ -140,12 +157,16 @@ def infer_embedding_provenance(path: str | Path) -> dict[str, object]:
             model_family = "qwen25_vl"
         else:
             model_family = "generic"
-        return {
+        provenance = {
             "model_family": model_family,
             "model_id": model_id,
             "layer": _scalar_int(data, "layer"),
             "pooling": _scalar_string(data, "pooling"),
         }
+        for key in ("model_revision", "tokenizer_revision", "preprocessing_sha256"):
+            if key in data:
+                provenance[key] = _scalar_string(data, key)
+        return provenance
 
 
 def _require_fitted_classifier(classifier: LogisticRegressionNumpy) -> None:
@@ -171,6 +192,10 @@ def _scalar_string(data, key: str) -> str:
     if len(values) != 1:
         raise ValueError(f"Detector field {key!r} must contain one value.")
     return str(values[0])
+
+
+def _optional_scalar_string(data, key: str, default: str = "") -> str:
+    return _scalar_string(data, key) if key in data else default
 
 
 def _scalar_float(data, key: str) -> float:

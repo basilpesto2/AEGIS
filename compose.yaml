@@ -1,0 +1,87 @@
+x-aegis-build: &aegis-build
+  context: .
+  args:
+    TORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
+
+x-aegis-runtime: &aegis-runtime
+  build: *aegis-build
+  image: aegis-mllm-guard:local
+  environment:
+    AEGIS_API_TOKEN: ${AEGIS_API_TOKEN:?Set AEGIS_API_TOKEN in .env}
+    AEGIS_FINGERPRINT_KEY: ${AEGIS_FINGERPRINT_KEY:?Set AEGIS_FINGERPRINT_KEY in .env}
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+  ports:
+    - "127.0.0.1:8766:8766"
+  volumes:
+    - aegis_model_cache:/app/models/huggingface
+    - aegis_audit:/var/lib/aegis/audit
+  restart: unless-stopped
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-aegis-prepare: &aegis-prepare
+  build: *aegis-build
+  image: aegis-mllm-guard:local
+  environment:
+    HF_TOKEN: ${HF_TOKEN:-}
+  volumes:
+    - aegis_model_cache:/app/models/huggingface
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  healthcheck:
+    disable: true
+
+services:
+  aegis-llava:
+    <<: *aegis-runtime
+    profiles: [llava]
+    command:
+      - serve
+      - --config
+      - /app/configs/aegis.llava.deployment.container.json
+
+  aegis-qwen:
+    <<: *aegis-runtime
+    profiles: [qwen]
+    command:
+      - serve
+      - --config
+      - /app/configs/aegis.deployment.container.json
+
+  prepare-llava:
+    <<: *aegis-prepare
+    profiles: [tools]
+    command:
+      - prepare
+      - --target
+      - llava05b
+      - --root
+      - /app
+      - --download
+
+  prepare-qwen:
+    <<: *aegis-prepare
+    profiles: [tools]
+    command:
+      - prepare
+      - --target
+      - qwen25vl3b
+      - --root
+      - /app
+      - --download
+
+volumes:
+  aegis_model_cache:
+  aegis_audit:

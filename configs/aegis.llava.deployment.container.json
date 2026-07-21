@@ -1,0 +1,79 @@
+{
+  "base_dir": "..",
+  "traffic_mode": "shadow",
+  "evidence_session_mode": "runtime",
+  "audit": {
+    "path": "/var/lib/aegis/audit/aegis-llava05b-shadow-{evidence_session_id}.jsonl",
+    "max_bytes": 104857600,
+    "backup_count": 5,
+    "fsync": false
+  },
+  "cache_dir": "/app/models/huggingface",
+  "detector": "models/aegis/aegis_llava_onevision_05b_text_detector_provenance_v2.npz",
+  "name": "aegis-llava05b-container",
+  "policy": {
+    "action_on_error": "review",
+    "block_threshold": null,
+    "review_threshold": 0.05,
+    "hash_images": true,
+    "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
+    "require_matching_provenance": true,
+    "review_margin": null
+  },
+  "provider": "AEGIS.providers:LlavaOnevisionGuardrailProvider",
+  "provider_options": {
+    "cache_requests": true,
+    "device_map": "auto",
+    "environment_overrides": false,
+    "local_files_only": true,
+    "feature_dim": 896,
+    "layer": -1,
+    "max_image_edge": 384,
+    "model_id": "models\\huggingface\\llava-onevision-qwen2-0.5b-ov-hf",
+    "runtime_model_id": "models/huggingface/llava-onevision-qwen2-0.5b-ov-hf",
+    "model_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+    "pooling": "text_tokens",
+    "request_cache_max_entries": 128,
+    "request_cache_ttl_seconds": 300.0,
+    "tokenizer_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+    "torch_dtype": "auto"
+  },
+  "request_limits": {
+    "allow_local_image_paths": false,
+    "allowed_image_media_types": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ],
+    "allowed_image_root": null,
+    "max_batch_size": 4,
+    "max_image_bytes": 10485760,
+    "max_image_pixels": 20000000,
+    "max_images_per_request": 1,
+    "max_request_id_characters": 256,
+    "max_text_characters": 32768
+  },
+  "require_model_cache": true,
+  "require_cuda": true,
+  "resources": {
+    "min_available_physical_bytes": 2147483648,
+    "min_available_virtual_bytes": 4294967296,
+    "min_cuda_device_memory_bytes": 2684354560,
+    "min_disk_free_bytes": 4294967296,
+    "min_model_cache_bytes": 1610612736,
+    "min_total_physical_bytes": 8589934592
+  },
+  "schema_version": 1,
+  "target_profile": "llava05b",
+  "server": {
+    "api_token_env": "AEGIS_API_TOKEN",
+    "host": "0.0.0.0",
+    "inference_timeout_seconds": 120.0,
+    "max_body_bytes": 12582912,
+    "max_concurrent_requests": 1,
+    "port": 8766,
+    "worker_mode": "process",
+    "worker_startup_timeout_seconds": 600.0
+  },
+  "warmup_request_json": "configs/llava_service_warmup_request.example.json"
+}

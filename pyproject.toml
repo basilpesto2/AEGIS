@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aegis-mllm-guard"
-version = "0.2.0"
-description = "Representation-space malicious prompt detection for multimodal language models"
+version = "0.3.0"
+description = "Self-hosted malicious-prompt guardrail for multimodal language models"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,12 +17,9 @@ dependencies = [
 [project.optional-dependencies]
 mllm = [
   "accelerate",
+  "huggingface-hub",
   "qwen-vl-utils",
   "transformers",
-]
-dev = [
-  "pytest>=8",
-  "ruff>=0.5",
 ]
 
 [project.scripts]
@@ -30,22 +27,3 @@ aegis = "AEGIS.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["AEGIS*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
-[tool.ruff]
-target-version = "py310"
-line-length = 100
-extend-exclude = [
-  ".venv",
-  "data",
-  "models",
-  "outputs",
-]
-
-[tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
-
-[tool.ruff.lint.per-file-ignores]
-"scripts/*.py" = ["E402"]

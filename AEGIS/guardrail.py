@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 import hashlib
+import hmac
+import math
+import os
 from pathlib import Path
 from typing import Protocol
 
@@ -20,6 +23,9 @@ class EmbeddingProvider(Protocol):
 
     model_family: str
     model_id: str
+    model_revision: str
+    tokenizer_revision: str
+    preprocessing_sha256: str
     pooling: str
     feature_dim: int
 
@@ -44,17 +50,34 @@ class GuardrailRequest:
             return "image"
         return "text"
 
-    def fingerprints(self, hash_images: bool = False) -> dict[str, object]:
+    def fingerprints(
+        self,
+        hash_images: bool = False,
+        hmac_key: bytes | None = None,
+    ) -> dict[str, object]:
         payload: dict[str, object] = {
             "request_id": self.request_id,
             "modality": self.modality,
-            "prompt_sha256": hashlib.sha256(self.text.encode("utf-8")).hexdigest(),
             "n_images": len(self.image_paths),
+            "fingerprint_algorithm": "hmac-sha256" if hmac_key else "sha256",
         }
+        if hmac_key:
+            payload["prompt_hmac_sha256"] = hmac.new(
+                hmac_key, self.text.encode("utf-8"), hashlib.sha256
+            ).hexdigest()
+        else:
+            payload["prompt_sha256"] = hashlib.sha256(
+                self.text.encode("utf-8")
+            ).hexdigest()
         if hash_images:
-            payload["image_sha256"] = [
-                _sha256_file(Path(path)) for path in self.image_paths
-            ]
+            if hmac_key:
+                payload["image_hmac_sha256"] = [
+                    _hmac_sha256_file(Path(path), hmac_key) for path in self.image_paths
+                ]
+            else:
+                payload["image_sha256"] = [
+                    _sha256_file(Path(path)) for path in self.image_paths
+                ]
         return payload
 
 
@@ -63,18 +86,30 @@ class GuardrailPolicy:
     """Threshold and failure behavior for production guardrail decisions."""
 
     block_threshold: float | None = None
+    review_threshold: float | None = None
     review_margin: float | None = None
     action_on_error: str = "review"
     require_matching_provenance: bool = False
     hash_images: bool = False
+    fingerprint_key_env: str | None = None
 
     def __post_init__(self) -> None:
         if self.block_threshold is not None and not 0.0 < self.block_threshold < 1.0:
             raise ValueError("block_threshold must be between 0 and 1.")
+        if self.review_threshold is not None and not 0.0 <= self.review_threshold < 1.0:
+            raise ValueError("review_threshold must be in [0, 1).")
+        if (
+            self.review_threshold is not None
+            and self.block_threshold is not None
+            and self.review_threshold >= self.block_threshold
+        ):
+            raise ValueError("review_threshold must be below block_threshold.")
         if self.review_margin is not None and not 0.0 <= self.review_margin < 0.5:
             raise ValueError("review_margin must be in [0, 0.5).")
         if self.action_on_error not in VALID_ACTIONS:
             raise ValueError(f"action_on_error must be one of {sorted(VALID_ACTIONS)}.")
+        if self.fingerprint_key_env is not None and not self.fingerprint_key_env.strip():
+            raise ValueError("fingerprint_key_env cannot be empty when provided.")
 
 
 @dataclass(frozen=True)
@@ -83,6 +118,7 @@ class GuardrailDecision:
     verdict: str
     risk_score: float
     threshold: float
+    review_threshold: float | None
     uncertain: bool
     reasons: tuple[str, ...]
     schema_version: int = GUARDRAIL_SCHEMA_VERSION
@@ -90,16 +126,24 @@ class GuardrailDecision:
     sample_id: str | None = None
     prompt_sha256: str | None = None
     image_sha256: tuple[str, ...] = ()
+    prompt_hmac_sha256: str | None = None
+    image_hmac_sha256: tuple[str, ...] = ()
+    fingerprint_algorithm: str | None = None
     modality: str | None = None
     model_family: str | None = None
     model_id: str | None = None
     pooling: str | None = None
     detector_source: str | None = None
+    error_type: str | None = None
+    error_detail: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
+        if not math.isfinite(float(payload["risk_score"])):
+            payload["risk_score"] = None
         payload["reasons"] = list(self.reasons)
         payload["image_sha256"] = list(self.image_sha256)
+        payload["image_hmac_sha256"] = list(self.image_hmac_sha256)
         return payload
 
 
@@ -110,9 +154,19 @@ class GuardrailRuntime:
         self,
         artifact: DetectorArtifact,
         policy: GuardrailPolicy | None = None,
+        include_error_details: bool = False,
     ) -> None:
         self.artifact = artifact
         self.policy = policy or GuardrailPolicy()
+        if (
+            self.policy.review_threshold is not None
+            and self.policy.review_threshold >= self.threshold
+        ):
+            raise ValueError(
+                "Policy review_threshold must be below the resolved block threshold."
+            )
+        self._fingerprint_key = resolve_fingerprint_key(self.policy)
+        self.include_error_details = bool(include_error_details)
 
     @property
     def threshold(self) -> float:
@@ -130,6 +184,14 @@ class GuardrailRuntime:
             else float(self.artifact.uncertainty_margin)
         )
 
+    @property
+    def review_threshold(self) -> float | None:
+        return (
+            None
+            if self.policy.review_threshold is None
+            else float(self.policy.review_threshold)
+        )
+
     def evaluate_request(
         self,
         request: GuardrailRequest,
@@ -142,17 +204,32 @@ class GuardrailRuntime:
                 features = features.reshape(1, -1)
             if features.shape[0] != 1:
                 raise ValueError(f"Provider returned {features.shape[0]} feature rows for one request.")
-            fingerprints = request.fingerprints(hash_images=self.policy.hash_images)
+            fingerprints = request.fingerprints(
+                hash_images=self.policy.hash_images,
+                hmac_key=self._fingerprint_key,
+            )
             return self.evaluate_features(
                 features,
                 request_ids=[request.request_id],
-                prompt_hashes=[str(fingerprints["prompt_sha256"])],
+                prompt_hashes=[
+                    _optional_string(fingerprints.get("prompt_sha256"))
+                ],
                 image_hashes=[
                     tuple(str(value) for value in fingerprints.get("image_sha256", []))
                 ],
+                prompt_hmac_hashes=[
+                    _optional_string(fingerprints.get("prompt_hmac_sha256"))
+                ],
+                image_hmac_hashes=[
+                    tuple(
+                        str(value)
+                        for value in fingerprints.get("image_hmac_sha256", [])
+                    )
+                ],
+                fingerprint_algorithms=[str(fingerprints["fingerprint_algorithm"])],
                 modalities=[str(fingerprints["modality"])],
             )[0]
-        except Exception:
+        except Exception as exc:
             if self.policy.action_on_error == "allow":
                 verdict = "unknown"
             else:
@@ -162,15 +239,34 @@ class GuardrailRuntime:
                 verdict=verdict,
                 risk_score=float("nan"),
                 threshold=self.threshold,
+                review_threshold=self.review_threshold,
                 uncertain=True,
                 reasons=("embedding_or_scoring_error",),
                 request_id=request.request_id,
-                prompt_sha256=request.fingerprints()["prompt_sha256"],
+                prompt_sha256=(
+                    str(request.fingerprints()["prompt_sha256"])
+                    if self._fingerprint_key is None
+                    else None
+                ),
+                prompt_hmac_sha256=(
+                    str(
+                        request.fingerprints(hmac_key=self._fingerprint_key)[
+                            "prompt_hmac_sha256"
+                        ]
+                    )
+                    if self._fingerprint_key is not None
+                    else None
+                ),
+                fingerprint_algorithm=(
+                    "hmac-sha256" if self._fingerprint_key is not None else "sha256"
+                ),
                 modality=request.modality,
                 model_family=getattr(provider, "model_family", None),
                 model_id=getattr(provider, "model_id", None),
                 pooling=getattr(provider, "pooling", None),
                 detector_source=self.artifact.source,
+                error_type=type(exc).__name__,
+                error_detail=str(exc) if self.include_error_details else None,
             )
 
     def evaluate_features(
@@ -180,6 +276,9 @@ class GuardrailRuntime:
         request_ids: list[str | None] | None = None,
         prompt_hashes: list[str | None] | None = None,
         image_hashes: list[tuple[str, ...]] | None = None,
+        prompt_hmac_hashes: list[str | None] | None = None,
+        image_hmac_hashes: list[tuple[str, ...]] | None = None,
+        fingerprint_algorithms: list[str | None] | None = None,
         modalities: list[str | None] | None = None,
     ) -> list[GuardrailDecision]:
         x = np.asarray(features, dtype=np.float64)
@@ -189,11 +288,17 @@ class GuardrailRuntime:
         request_ids = _default_list(request_ids, n_rows)
         prompt_hashes = _default_list(prompt_hashes, n_rows)
         image_hashes = image_hashes or [tuple() for _ in range(n_rows)]
+        prompt_hmac_hashes = _default_list(prompt_hmac_hashes, n_rows)
+        image_hmac_hashes = image_hmac_hashes or [tuple() for _ in range(n_rows)]
+        fingerprint_algorithms = _default_list(fingerprint_algorithms, n_rows)
         modalities = _default_list(modalities, n_rows)
         _require_length(sample_ids, n_rows, "sample_ids")
         _require_length(request_ids, n_rows, "request_ids")
         _require_length(prompt_hashes, n_rows, "prompt_hashes")
         _require_length(image_hashes, n_rows, "image_hashes")
+        _require_length(prompt_hmac_hashes, n_rows, "prompt_hmac_hashes")
+        _require_length(image_hmac_hashes, n_rows, "image_hmac_hashes")
+        _require_length(fingerprint_algorithms, n_rows, "fingerprint_algorithms")
         _require_length(modalities, n_rows, "modalities")
 
         decisions = []
@@ -205,6 +310,12 @@ class GuardrailRuntime:
                     request_id=request_ids[idx],
                     prompt_sha256=prompt_hashes[idx],
                     image_sha256=image_hashes[idx],
+                    prompt_hmac_sha256=prompt_hmac_hashes[idx],
+                    image_hmac_sha256=image_hmac_hashes[idx],
+                    fingerprint_algorithm=(
+                        fingerprint_algorithms[idx]
+                        or ("sha256" if prompt_hashes[idx] is not None else None)
+                    ),
                     modality=modalities[idx],
                 )
             )
@@ -239,34 +350,55 @@ class GuardrailRuntime:
         request_id: str | None,
         prompt_sha256: str | None,
         image_sha256: tuple[str, ...],
+        prompt_hmac_sha256: str | None,
+        image_hmac_sha256: tuple[str, ...],
+        fingerprint_algorithm: str | None,
         modality: str | None,
     ) -> GuardrailDecision:
         threshold = self.threshold
         malicious = score >= threshold
-        uncertain = abs(score - threshold) <= self.review_margin
-        if uncertain:
-            action = "review"
-        elif malicious:
-            action = "block"
+        review_threshold = self.review_threshold
+        if review_threshold is not None:
+            uncertain = review_threshold <= score < threshold
+            if malicious:
+                action = "block"
+            elif uncertain:
+                action = "review"
+            else:
+                action = "allow"
         else:
-            action = "allow"
+            uncertain = abs(score - threshold) <= self.review_margin
+            if uncertain:
+                action = "review"
+            elif malicious:
+                action = "block"
+            else:
+                action = "allow"
 
         reasons = []
         reasons.append("score_above_threshold" if malicious else "score_below_threshold")
         if uncertain:
-            reasons.append("within_uncertainty_margin")
+            reasons.append(
+                "within_review_band"
+                if review_threshold is not None
+                else "within_uncertainty_margin"
+            )
 
         return GuardrailDecision(
             action=action,
             verdict="malicious" if malicious else "benign",
             risk_score=score,
             threshold=threshold,
+            review_threshold=review_threshold,
             uncertain=uncertain,
             reasons=tuple(reasons),
             request_id=request_id,
             sample_id=sample_id,
             prompt_sha256=prompt_sha256,
             image_sha256=image_sha256,
+            prompt_hmac_sha256=prompt_hmac_sha256,
+            image_hmac_sha256=image_hmac_sha256,
+            fingerprint_algorithm=fingerprint_algorithm,
             modality=modality,
             model_family=self.artifact.model_family,
             model_id=self.artifact.model_id,
@@ -283,8 +415,14 @@ class GuardrailRuntime:
         if not self.policy.require_matching_provenance:
             return
         mismatches = []
-        for name in ("model_family", "model_id", "pooling"):
-            provider_value = getattr(provider, name)
+        names = ["model_family", "model_id", "pooling"]
+        names.extend(
+            name
+            for name in ("model_revision", "tokenizer_revision", "preprocessing_sha256")
+            if getattr(self.artifact, name)
+        )
+        for name in names:
+            provider_value = getattr(provider, name, None)
             detector_value = getattr(self.artifact, name)
             if provider_value != detector_value:
                 mismatches.append(f"{name}: {provider_value!r} != {detector_value!r}")
@@ -351,3 +489,27 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _hmac_sha256_file(path: Path, key: bytes) -> str:
+    digest = hmac.new(key, digestmod=hashlib.sha256)
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def resolve_fingerprint_key(policy: GuardrailPolicy) -> bytes | None:
+    if policy.fingerprint_key_env is None:
+        return None
+    value = os.getenv(policy.fingerprint_key_env)
+    if value is None or not value:
+        raise ValueError(
+            f"Fingerprint HMAC key environment variable is missing: "
+            f"{policy.fingerprint_key_env}"
+        )
+    return value.encode("utf-8")
+
+
+def _optional_string(value: object) -> str | None:
+    return None if value is None else str(value)
