@@ -2,21 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/aegis/feature-bundle.schema.json",
   "title": "AEGIS aligned feature bundle",
-  "description": "Logical schema for arrays stored in an NPZ feature bundle.",
+  "description": "Logical schema for arrays and scalar provenance stored in an NPZ feature bundle.",
   "type": "object",
   "required": [
     "sample_ids",
     "text_embeddings",
     "image_embeddings",
     "attribution_features",
-    "feature_source"
+    "feature_source",
+    "model_family",
+    "model_id",
+    "model_revision",
+    "tokenizer_revision",
+    "preprocessing_sha256",
+    "layer",
+    "pooling",
+    "id_column"
   ],
   "properties": {
     "sample_ids": {
-      "description": "Unique IDs in exact benchmark row order",
+      "description": "Unique IDs in exact metadata-row order",
       "type": "array",
       "minItems": 1,
-      "items": {"type": "string", "minLength": 1}
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "text_embeddings": {
       "description": "Finite n by d pooled hidden-state matrix",
@@ -25,7 +37,9 @@
       "items": {
         "type": "array",
         "minItems": 1,
-        "items": {"type": "number"}
+        "items": {
+          "type": "number"
+        }
       }
     },
     "image_embeddings": {
@@ -35,7 +49,9 @@
       "items": {
         "type": "array",
         "minItems": 1,
-        "items": {"type": "number"}
+        "items": {
+          "type": "number"
+        }
       }
     },
     "attribution_features": {
@@ -45,30 +61,52 @@
       "items": {
         "type": "array",
         "minItems": 1,
-        "items": {"type": "number"}
+        "items": {
+          "type": "number"
+        }
       }
     },
     "feature_source": {
-      "description": "Extractor/model provenance identifier",
+      "description": "Extractor and model provenance identifier",
       "type": "string",
       "minLength": 1
     },
-    "provenance": {
-      "description": "Required companion-manifest fields for MLLM-derived evidence.",
-      "type": "object",
-      "properties": {
-        "model_id": {"type": "string", "minLength": 1},
-        "model_revision": {"type": "string", "minLength": 1},
-        "tokenizer_revision": {"type": "string", "minLength": 1},
-        "layer": {"type": "integer"},
-        "pooling": {"type": "string", "minLength": 1},
-        "preprocessing_sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "embedding_dimension": {"type": "integer", "minimum": 1}
-      },
-      "additionalProperties": true
+    "model_family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tokenizer_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "preprocessing_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "layer": {
+      "type": "integer"
+    },
+    "pooling": {
+      "type": "string",
+      "enum": [
+        "text_tokens",
+        "image_tokens"
+      ]
+    },
+    "id_column": {
+      "type": "string",
+      "enum": [
+        "sample_id",
+        "variant_id"
+      ]
     }
   },
   "additionalProperties": true

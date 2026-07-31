@@ -41,6 +41,11 @@ def main() -> None:
             "choose a versioned --output-dir or use --force"
         )
 
+    feature_provenance = _load_feature_provenance(args.features)
+    if feature_provenance["id_column"] != "sample_id":
+        raise ValueError(
+            "detector training requires a feature bundle keyed by sample_id"
+        )
     metadata = load_metadata(args.metadata)
     bundle = load_feature_bundle(args.features, metadata)
     metadata_sha256 = _sha256(args.metadata)
@@ -69,6 +74,7 @@ def main() -> None:
             "selection_rule": "maximum validation AUPRC then AUROC",
             "metadata_sha256": metadata_sha256,
             "features_sha256": features_sha256,
+            **feature_provenance,
         },
     )
     test_rows: list[dict[str, object]] = []
@@ -80,7 +86,7 @@ def main() -> None:
                 "label_id": row["label_id"],
                 "attack_style": row["attack_style"],
                 "risk_score": float(score),
-                "threshold": float(selected["threshold"]),
+                "detector_threshold": float(selected["threshold"]),
                 "predicted_label_id": int(float(score) >= float(selected["threshold"])),
             }
         )
@@ -95,13 +101,13 @@ def main() -> None:
         "selection_rule": "maximum validation AUPRC then AUROC; test metrics are not used for selection",
         "selected_test_metrics": selected["test_metrics"],
         "limitations": (
-            "deterministic_smoke_fixture results verify software only"
-            if bundle.feature_source.startswith("deterministic_smoke")
-            else "results apply only to the recorded model, data, preprocessing, and split"
+            "results apply only to the recorded model, data, preprocessing, "
+            "feature extraction, and split"
         ),
         "provenance": {
             "metadata_sha256": metadata_sha256,
             "features_sha256": features_sha256,
+            **feature_provenance,
             "python": platform.python_version(),
             "numpy": np.__version__,
         },
@@ -117,6 +123,44 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _load_feature_provenance(path: Path) -> dict[str, object]:
+    required = {
+        "model_family",
+        "model_id",
+        "model_revision",
+        "tokenizer_revision",
+        "preprocessing_sha256",
+        "layer",
+        "pooling",
+        "id_column",
+    }
+    with np.load(path, allow_pickle=False) as data:
+        missing = required - set(data.files)
+        if missing:
+            raise ValueError(
+                "feature bundle lacks required provenance: "
+                + ", ".join(sorted(missing))
+            )
+        result: dict[str, object] = {
+            key: (
+                int(np.asarray(data[key]).reshape(-1)[0])
+                if key == "layer"
+                else str(np.asarray(data[key]).reshape(-1)[0]).strip()
+            )
+            for key in required
+        }
+    for key, value in result.items():
+        if key != "layer" and not value:
+            raise ValueError(f"feature provenance {key} must be non-empty")
+    fingerprint = str(result["preprocessing_sha256"])
+    if (
+        len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ):
+        raise ValueError("preprocessing_sha256 must be lowercase SHA-256 hex")
+    return result
 
 
 def _sha256(path: Path) -> str:

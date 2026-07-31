@@ -1,14 +1,5 @@
 * text=auto eol=lf
 
-# Preserve the original byte identity of frozen Final Report evidence. These files
-# include historical CRLF text snapshots whose published SHA-256 values are part of
-# their provenance; new, versioned reproductions use LF.
-deliverables/ablation_report/legacy_evidence.csv -text whitespace=cr-at-eol
-deliverables/ablation_report/results/** -text whitespace=cr-at-eol
-deliverables/pipeline/artifacts/smoke/** -text whitespace=cr-at-eol
-deliverables/pipeline/fixtures/smoke_features.* -text whitespace=cr-at-eol
-deliverables/red_teaming/generated/** -text whitespace=cr-at-eol
-
 *.npz binary
 *.png binary
 *.xlsx binary

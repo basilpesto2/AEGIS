@@ -26,18 +26,31 @@ from aegis_research.signals import binary_entropy, build_feature_views  # noqa: 
 
 
 DEFAULT_METADATA = DELIVERABLES / "benchmark" / "data" / "benchmark.csv"
-DEFAULT_FEATURES = PIPELINE / "fixtures" / "smoke_features.npz"
+PROVENANCE_KEYS = (
+    "model_family",
+    "model_id",
+    "model_revision",
+    "tokenizer_revision",
+    "preprocessing_sha256",
+    "layer",
+    "pooling",
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the AEGIS ablation and transfer report.")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
-    parser.add_argument("--features", type=Path, default=DEFAULT_FEATURES)
+    parser.add_argument(
+        "--features",
+        type=Path,
+        required=True,
+        help="Provenance-complete MLLM feature bundle.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=ROOT / "runs" / "reproduction_v1",
-        help="Versioned output directory; committed historical results are never overwritten by default.",
+        default=ROOT / "runs" / "current",
+        help="Run-specific output directory.",
     )
     parser.add_argument("--report", type=Path, help="Report path; defaults to OUTPUT_DIR/REPORT.md.")
     parser.add_argument("--adaptive-summary", type=Path)
@@ -62,10 +75,11 @@ def main() -> None:
         )
     report_path = args.report or args.output_dir / "REPORT.md"
     _prepare_output(args.output_dir, report_path, force=args.force)
+    feature_provenance = _load_feature_provenance(args.features)
+    if feature_provenance["id_column"] != "sample_id":
+        raise ValueError("ablation requires a feature bundle keyed by sample_id")
     metadata = load_metadata(args.metadata)
     bundle = load_feature_bundle(args.features, metadata)
-    labels = np.asarray([int(row["label_id"]) for row in metadata], dtype=np.int64)
-    splits = np.asarray([row["split"] for row in metadata])
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     full_results, fitted = run_ablation_suite(metadata, bundle, ExperimentConfig(seed=42))
@@ -101,14 +115,11 @@ def main() -> None:
         "features": _portable_path(args.features),
         "features_sha256": _sha256(args.features),
         "feature_source": bundle.feature_source,
+        "feature_provenance": feature_provenance,
         "rows": len(metadata),
         "selection": "feature view and threshold use validation data only",
         "test_policy": "test rows are not used for hyperparameter or threshold selection",
-        "scientific_status": (
-            "software_smoke_test_only"
-            if bundle.feature_source.startswith("deterministic_smoke")
-            else "model_evidence_requires_manifest_review"
-        ),
+        "scientific_status": "provenance_complete_model_evidence",
         "adaptive_evidence": adaptive_provenance,
         "runtime_context": _current_runtime_context(),
         "tool_versions": {
@@ -154,27 +165,49 @@ def _load_adaptive_evidence(
     rows = list(payload.get("summary", []))
     if not rows:
         raise ValueError("adaptive summary does not contain result rows")
-    with np.load(args.adaptive_detector, allow_pickle=False) as detector:
-        detector_threshold = float(np.asarray(detector["threshold"]).reshape(-1)[0])
-        metadata_json = json.loads(
-            str(np.asarray(detector["metadata_json"]).reshape(-1)[0])
+    summary_provenance = payload.get("provenance")
+    if not isinstance(summary_provenance, dict):
+        raise ValueError("adaptive summary does not contain provenance")
+    supplied_hashes = {
+        "scores_sha256": _sha256(args.adaptive_scores),
+        "detector_sha256": _sha256(args.adaptive_detector),
+        "features_sha256": _sha256(args.adaptive_features),
+    }
+    hash_mismatches = [
+        key
+        for key, actual in supplied_hashes.items()
+        if summary_provenance.get(key) != actual
+    ]
+    if hash_mismatches:
+        raise ValueError(
+            "adaptive summary does not describe the supplied inputs: "
+            + ", ".join(sorted(hash_mismatches))
         )
-    with np.load(args.adaptive_features, allow_pickle=False) as features:
-        feature_source = str(np.asarray(features["feature_source"]).reshape(-1)[0])
+    detector_context = _load_detector_context(args.adaptive_detector)
+    detector_threshold = float(detector_context["threshold"])
+    adaptive_feature_provenance = _load_feature_provenance(
+        args.adaptive_features
+    )
+    _validate_detector_feature_provenance(
+        detector_context,
+        adaptive_feature_provenance,
+    )
     summary_thresholds = [float(row["threshold"]) for row in rows]
     if any(
         not math.isclose(value, detector_threshold, rel_tol=0.0, abs_tol=1e-12)
         for value in summary_thresholds
     ):
         raise ValueError(
-            "adaptive summary threshold does not match the supplied fixture detector"
+            "adaptive summary threshold does not match the supplied detector"
         )
     with args.adaptive_scores.open("r", encoding="utf-8-sig", newline="") as handle:
         score_rows = list(csv.DictReader(handle))
     if not score_rows or any(row.get("label_id") != "1" for row in score_rows):
         raise ValueError("adaptive scores must be a non-empty malicious-only panel")
-    score_thresholds = [_recorded_detector_threshold(row) for row in score_rows]
-    if any(value is None for value in score_thresholds) or any(
+    if "detector_threshold" not in score_rows[0]:
+        raise ValueError("adaptive scores must record detector_threshold")
+    score_thresholds = [float(row["detector_threshold"]) for row in score_rows]
+    if any(
         not math.isclose(
             float(value),
             detector_threshold,
@@ -185,23 +218,120 @@ def _load_adaptive_evidence(
     ):
         raise ValueError("adaptive score thresholds do not match the detector")
     score_views = {row["feature_view"] for row in score_rows}
-    if score_views != {str(metadata_json["feature_view"])}:
+    if score_views != {str(detector_context["feature_view"])}:
         raise ValueError("adaptive score feature view does not match the detector")
+    threshold_kind = str(summary_provenance.get("threshold_kind", ""))
+    if threshold_kind != "detector_artifact_block_threshold":
+        raise ValueError(
+            "ablation import requires detector_artifact_block_threshold evidence"
+        )
     return rows, {
         "summary": _portable_path(args.adaptive_summary),
         "summary_sha256": _sha256(args.adaptive_summary),
         "scores": _portable_path(args.adaptive_scores),
-        "scores_sha256": _sha256(args.adaptive_scores),
+        "scores_sha256": supplied_hashes["scores_sha256"],
         "detector": _portable_path(args.adaptive_detector),
-        "detector_sha256": _sha256(args.adaptive_detector),
+        "detector_sha256": supplied_hashes["detector_sha256"],
         "features": _portable_path(args.adaptive_features),
-        "features_sha256": _sha256(args.adaptive_features),
-        "feature_source": feature_source,
-        "feature_view": str(metadata_json["feature_view"]),
+        "features_sha256": supplied_hashes["features_sha256"],
+        "feature_provenance": adaptive_feature_provenance,
+        "feature_view": str(detector_context["feature_view"]),
         "threshold": detector_threshold,
-        "threshold_kind": "fixture_detector_block_threshold",
+        "threshold_kind": threshold_kind,
         "selection_policy": "bounded best-of-N over a fixed ordered variant panel",
     }
+
+
+def _load_feature_provenance(path: Path) -> dict[str, object]:
+    required = {*PROVENANCE_KEYS, "id_column", "feature_source"}
+    with np.load(path, allow_pickle=False) as data:
+        missing = required - set(data.files)
+        if missing:
+            raise ValueError(
+                "feature bundle lacks required provenance: "
+                + ", ".join(sorted(missing))
+            )
+        result: dict[str, object] = {
+            key: (
+                int(np.asarray(data[key]).reshape(-1)[0])
+                if key == "layer"
+                else str(np.asarray(data[key]).reshape(-1)[0]).strip()
+            )
+            for key in required
+        }
+    for key, value in result.items():
+        if key != "layer" and not value:
+            raise ValueError(f"feature provenance {key} must be non-empty")
+    fingerprint = str(result["preprocessing_sha256"])
+    if (
+        len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ):
+        raise ValueError("preprocessing_sha256 must be lowercase SHA-256 hex")
+    return result
+
+
+def _load_detector_context(path: Path) -> dict[str, object]:
+    with np.load(path, allow_pickle=False) as data:
+        if "threshold" not in data or "weights" not in data:
+            raise ValueError("adaptive detector lacks threshold or weights")
+        metadata = (
+            json.loads(str(np.asarray(data["metadata_json"]).reshape(-1)[0]))
+            if "metadata_json" in data
+            else {}
+        )
+        if "feature_view" in metadata:
+            feature_view = str(metadata["feature_view"])
+        else:
+            pooling = str(np.asarray(data["pooling"]).reshape(-1)[0])
+            feature_views = {
+                "text_tokens": "text_representation",
+                "image_tokens": "image_representation",
+            }
+            if pooling not in feature_views:
+                raise ValueError(
+                    f"cannot map detector pooling to feature view: {pooling!r}"
+                )
+            feature_view = feature_views[pooling]
+        result: dict[str, object] = {
+            "threshold": float(np.asarray(data["threshold"]).reshape(-1)[0]),
+            "feature_dim": int(np.asarray(data["weights"]).size),
+            "feature_view": feature_view,
+        }
+        for key in PROVENANCE_KEYS:
+            if key in data:
+                result[key] = (
+                    int(np.asarray(data[key]).reshape(-1)[0])
+                    if key == "layer"
+                    else str(np.asarray(data[key]).reshape(-1)[0]).strip()
+                )
+            elif key in metadata:
+                result[key] = (
+                    int(metadata[key]) if key == "layer" else str(metadata[key])
+                )
+            else:
+                raise ValueError(f"detector lacks required provenance: {key}")
+    return result
+
+
+def _validate_detector_feature_provenance(
+    detector: dict[str, object],
+    features: dict[str, object],
+) -> None:
+    mismatches: list[str] = []
+    for key in PROVENANCE_KEYS:
+        detector_value = detector[key]
+        feature_value = features[key]
+        if key == "model_id":
+            detector_value = str(detector_value).replace("\\", "/")
+            feature_value = str(feature_value).replace("\\", "/")
+        if detector_value != feature_value:
+            mismatches.append(key)
+    if mismatches:
+        raise ValueError(
+            "adaptive feature provenance does not match detector: "
+            + ", ".join(mismatches)
+        )
 
 
 def _current_runtime_context() -> dict[str, object]:
@@ -229,6 +359,7 @@ def _current_runtime_context() -> dict[str, object]:
                 np.asarray(detector["preprocessing_sha256"]).reshape(-1)[0]
             ),
             "pooling": str(np.asarray(detector["pooling"]).reshape(-1)[0]),
+            "layer": int(np.asarray(detector["layer"]).reshape(-1)[0]),
             "feature_dim": int(np.asarray(detector["weights"]).size),
             "block_threshold": float(
                 np.asarray(detector["threshold"]).reshape(-1)[0]
@@ -363,13 +494,35 @@ def _render_report(
 ) -> str:
     status = str(provenance["scientific_status"])
     runtime = dict(provenance["runtime_context"])
+    feature_provenance = dict(provenance["feature_provenance"])
+    runtime_match = all(
+        (
+            str(feature_provenance[key]).replace("\\", "/")
+            if key == "model_id"
+            else feature_provenance[key]
+        )
+        == (
+            str(runtime[key]).replace("\\", "/")
+            if key == "model_id"
+            else runtime[key]
+        )
+        for key in PROVENANCE_KEYS
+    )
+    relationship = (
+        "The feature bundle matches the deployed detector's model, tokenizer, "
+        "layer, pooling, and preprocessing provenance."
+        if runtime_match
+        else (
+            "The feature bundle does not match every deployed-detector provenance "
+            "field; its results apply only to the recorded research configuration."
+        )
+    )
     adaptive_status = (
-        "No adaptive fixture panel was attached to this run."
+        "No bounded-evasion panel was attached to this run."
         if provenance["adaptive_evidence"] is None
         else (
-            "The attached panel uses the 8-dimensional fixture detector at threshold "
-            f"`{provenance['adaptive_evidence']['threshold']}`; it does not use the "
-            "deployed LLaVA detector."
+            "The attached panel uses the recorded detector and feature provenance "
+            f"at threshold `{provenance['adaptive_evidence']['threshold']}`."
         )
     )
     lines = [
@@ -378,9 +531,13 @@ def _render_report(
         "## Evidence status",
         "",
         f"This run is classified as **`{status}`** and uses feature source "
-        f"**`{provenance['feature_source']}`**. The deterministic fixture verifies the complete "
-        "training, validation, thresholding, low-label, uncertainty, transfer, and reporting path. "
-        "It is not evidence of MLLM safety performance.",
+        f"**`{provenance['feature_source']}`**. Its model is "
+        f"`{feature_provenance['model_id']}` at model revision "
+        f"`{feature_provenance['model_revision']}` and tokenizer revision "
+        f"`{feature_provenance['tokenizer_revision']}`. The extraction uses layer "
+        f"`{feature_provenance['layer']}`, pooling "
+        f"`{feature_provenance['pooling']}`, and preprocessing fingerprint "
+        f"`{feature_provenance['preprocessing_sha256']}`.",
         "",
         "## Relationship to the current runtime",
         "",
@@ -388,16 +545,13 @@ def _render_report(
         f"`{runtime['detector']}` (SHA-256 `{runtime['detector_sha256']}`), an "
         f"{runtime['feature_dim']}-dimensional `{runtime['pooling']}` detector with block "
         f"threshold `{runtime['block_threshold']}` and review threshold "
-        f"`{runtime['review_threshold']}`. The tables below use a separate deterministic "
-        "fixture and must not be cited as tuned-v3 accuracy, attack-success, or robustness "
-        "measurements. Current functional runtime evidence is recorded in "
-        "`deliverables/runtime_validation/`.",
+        f"`{runtime['review_threshold']}`. {relationship}",
         "",
         "## Protocol",
         "",
         "Matched benign/adversarial groups remain in one split. Classifier fitting uses training "
         "rows, threshold selection uses validation rows, and the test split is not used for "
-        "selection. The fixture experiment detector is class-balanced logistic regression over pooled "
+        "selection. The experiment detector is class-balanced logistic regression over pooled "
         "representations and compact signals.",
         "",
         "## Signal importance",
@@ -405,8 +559,8 @@ def _render_report(
         _markdown_table(full, ["feature_view", "feature_dim", "auroc", "auprc", "precision", "recall", "f1", "mean_test_uncertainty"]),
         "",
         "`all_input_signals` combines text and image representations, cross-modal consistency, "
-        "and perturbation-attribution summaries. Comparisons are diagnostic because the smoke "
-        "extractor is intentionally lightweight and its lexical cues are not MLLM hidden states.",
+        "and perturbation-attribution summaries. Each comparison is scoped to the exact "
+        "model and preprocessing provenance recorded above.",
         "",
         "## Low-label and pseudo-label ablation",
         "",
@@ -420,9 +574,9 @@ def _render_report(
         "",
         _markdown_table(transfer, ["feature_view", "held_out_attack_style", "n_test", "auroc", "auprc", "precision", "recall", "f1"]),
         "",
-        "Each transfer row holds out all four matched groups of one attack family. Training and "
-        "threshold selection use different attack families. With only eight held-out rows per "
-        "family, these estimates have high variance and must not be generalized to deployment.",
+        "Each transfer row holds out the matched groups of one attack family. Training and "
+        "threshold selection use different attack families. Small held-out groups produce "
+        "high-variance estimates and must not be generalized to deployment.",
         "",
         "## Uncertainty and review coverage",
         "",
@@ -431,38 +585,30 @@ def _render_report(
         "Rows are ranked for review by normalized binary entropy. This table exposes the "
         "coverage/accuracy trade-off rather than treating near-threshold decisions as certain.",
         "",
-        "## Bounded best-of-N fixture evasion",
+        "## Bounded best-of-N detector evasion",
         "",
         _markdown_table(adaptive, ["query_budget", "n_samples", "threshold", "malicious_recall", "evasion_rate", "mean_worst_case_score"]) if adaptive else "No scored adaptive panel was available for this run.",
         "",
         "The evaluator selects the lowest detector score in hindsight among the first N fixed, "
         "deterministic variants. This is a bounded best-of-N oracle analysis, not a sequential "
-        "adaptive attack policy. These smoke results measure fixture-detector evasion, not harmful "
-        "MLLM response generation. " + adaptive_status,
-        "",
-        "## Legacy MLLM evidence",
-        "",
-        "`legacy_evidence.csv` preserves aggregate values reported in commit `3f6e46a`. The "
-        "underlying processed data, embeddings, and output tables were ignored and are absent, "
-        "so these values are historical context only - not independently rerun results.",
+        "adaptive attack policy. It measures detector-score evasion, not harmful response "
+        "generation. " + adaptive_status,
         "",
         "## Conclusions",
         "",
         "The framework measures representation, modality, consistency, attribution, "
-        "uncertainty, label-efficiency, and held-family transfer independently. Scientific claims "
-        "remain conditional on replacing the smoke fixture with provenance-complete MLLM features "
-        "and rerunning this report into a new versioned output directory.",
+        "uncertainty, label-efficiency, and held-family transfer independently. Interpret every "
+        "metric within the recorded dataset, model, preprocessing, threshold, and traffic-mode "
+        "scope.",
         "",
         "## Reproduction",
         "",
         "```powershell",
-        '$run = "deliverables/reproductions/ablation_v1"',
-        "",
-        "python deliverables/pipeline/scripts/build_smoke_features.py `",
-        '  --output "$run/benchmark_smoke_features.npz"',
+        '$run = "deliverables/runs/current_llava"',
         "python deliverables/ablation_report/run_ablation.py `",
-        '  --features "$run/benchmark_smoke_features.npz" `',
-        '  --output-dir "$run/results"',
+        '  --metadata "$run/features/aligned_source_metadata.csv" `',
+        '  --features "$run/features/feature_bundle.npz" `',
+        '  --output-dir "$run/ablation"',
         "```",
         "",
     ]
@@ -495,22 +641,6 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         )
         writer.writeheader()
         writer.writerows(rows)
-
-
-def _recorded_detector_threshold(row: dict[str, str]) -> float | None:
-    values = [
-        float(row[name])
-        for name in ("detector_threshold", "threshold")
-        if row.get(name, "").strip()
-    ]
-    if not values:
-        return None
-    if any(
-        not math.isclose(value, values[0], rel_tol=0.0, abs_tol=1e-12)
-        for value in values[1:]
-    ):
-        raise ValueError("adaptive score row contains conflicting threshold aliases")
-    return values[0]
 
 
 if __name__ == "__main__":

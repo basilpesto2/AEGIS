@@ -1,35 +1,39 @@
-# Ablation and transfer report
+# Ablation and transfer workflow
 
-The committed `REPORT.md` and `results/` tables are a frozen deterministic fixture
-snapshot. They verify the experiment, threshold-selection, low-label, uncertainty,
-transfer, and reporting software; they do not measure the current tuned-v3 LLaVA
-detector.
+`run_ablation.py` generates signal-importance, low-label, uncertainty, attack-family
+transfer, and optional bounded-evasion tables from an explicitly supplied
+provenance-complete MLLM feature bundle. No generated report or result table is
+committed.
 
-`legacy_evidence.csv` separately preserves aggregate values recovered from commit
-`3f6e46a`. Its source embeddings and detailed outputs are absent, so those values are
-historical context rather than independently rerun evidence.
+The metadata and feature rows must align exactly. Model family, model identifier,
+model and tokenizer revisions, layer, pooling, preprocessing fingerprint, and feature
+dimensions are recorded in every generated run manifest.
 
-## Reproduce into a new run
+## Generate a report
 
-`run_ablation.py` writes to `runs/reproduction_v1/` by default and refuses to overwrite
-an existing run unless `--force` is explicit. It does not silently attach the historical
-fixture-evasion table to arbitrary feature bundles.
+```powershell
+$run = "deliverables/runs/current_llava"
 
-To reproduce the committed fixture protocol into a new versioned directory:
+python deliverables/ablation_report/run_ablation.py `
+  --metadata "$run/features/aligned_source_metadata.csv" `
+  --features "$run/features/feature_bundle.npz" `
+  --output-dir "$run/ablation"
+```
+
+To include a bounded red-team table, also supply the summary, score table, detector,
+and feature bundle from the same current run:
 
 ```powershell
 python deliverables/ablation_report/run_ablation.py `
-  --output-dir deliverables/ablation_report/runs/reproduction_v1 `
-  --adaptive-summary deliverables/red_teaming/generated/adaptive_summary.json `
-  --adaptive-scores deliverables/red_teaming/generated/scored_variants.csv `
-  --adaptive-detector deliverables/pipeline/artifacts/smoke/selected_detector.npz `
-  --adaptive-features deliverables/red_teaming/generated/variant_smoke_features.npz
+  --metadata "$run/features/aligned_source_metadata.csv" `
+  --features "$run/features/feature_bundle.npz" `
+  --output-dir "$run/ablation_with_redteam" `
+  --adaptive-summary "$run/redteam/best_of_n.json" `
+  --adaptive-scores "$run/redteam/scored_variants.csv" `
+  --adaptive-detector models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz `
+  --adaptive-features "$run/redteam/features/feature_bundle.npz"
 ```
 
-Choose a different `--output-dir` for every evidence-producing run. Passing a new
-`--features` bundle is not sufficient by itself to establish reportable MLLM evidence:
-review its manifest for model ID, model and tokenizer revisions, preprocessing hash,
-pooling, feature dimensions, corpus hash, and split compatibility.
-
-The current runtime relationship and its evidence limits are stated in `REPORT.md`,
-`../HISTORICAL_SNAPSHOT.md`, and `../runtime_validation/README.md`.
+The ablation runner verifies that the adaptive summary's recorded score, detector,
+and feature hashes match the supplied files. It refuses to replace a non-empty output
+directory unless `--force` is explicit. Use a new directory for each reportable run.

@@ -27,7 +27,7 @@ def main() -> None:
         "--threshold-kind",
         required=True,
         choices=(
-            "fixture_detector_block_threshold",
+            "detector_artifact_block_threshold",
             "runtime_block_threshold",
             "runtime_review_threshold",
         ),
@@ -55,36 +55,49 @@ def main() -> None:
     if not 0.0 < threshold < 1.0:
         raise ValueError("threshold must be between zero and one")
     if (
-        args.threshold_kind == "fixture_detector_block_threshold"
+        args.threshold_kind == "detector_artifact_block_threshold"
         and not math.isclose(threshold, artifact_threshold, rel_tol=0.0, abs_tol=1e-12)
     ):
         raise ValueError(
-            "fixture_detector_block_threshold must equal the supplied detector artifact threshold"
+            "detector_artifact_block_threshold must equal the supplied detector artifact threshold"
         )
     if args.output.exists() and not args.force:
         raise FileExistsError(
             f"refusing to overwrite {args.output}; choose a versioned output or pass --force"
         )
 
-    feature_provenance = _feature_metadata(args.features)
+    feature_provenance, feature_ids = _feature_metadata(args.features)
+    _validate_provenance_compatibility(detector, feature_provenance)
     with args.scores.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     required = {
         "base_sample_id",
         "query_index",
         "variant_type",
+        "variant_id",
         "risk_score",
         "label_id",
+        "detector_threshold",
+        "feature_view",
     }
     if not rows or required - set(rows[0]):
         raise ValueError(f"scored variants must contain columns {sorted(required)}")
+    if feature_provenance["id_column"] != "variant_id":
+        raise ValueError(
+            "bounded evasion evaluation requires a feature bundle keyed by variant_id"
+        )
+    score_ids = [row["variant_id"].strip() for row in rows]
+    if any(not value for value in score_ids):
+        raise ValueError("scored variant_id values must be non-empty")
+    if len(set(score_ids)) != len(score_ids):
+        raise ValueError("scored variant_id values must be unique")
+    if score_ids != feature_ids:
+        raise ValueError(
+            "scored variant IDs are not aligned to the supplied feature bundle"
+        )
     if any(row["label_id"].strip() != "1" for row in rows):
         raise ValueError("bounded evasion evaluation requires a malicious-only score panel")
-    recorded = [_recorded_detector_threshold(row) for row in rows]
-    if any(value is None for value in recorded):
-        raise ValueError(
-            "score rows must record detector_threshold (or the legacy threshold alias)"
-        )
+    recorded = [float(row["detector_threshold"]) for row in rows]
     if any(
         not math.isclose(float(value), artifact_threshold, rel_tol=0.0, abs_tol=1e-12)
         for value in recorded
@@ -207,40 +220,117 @@ def _detector_metadata(path: Path) -> dict[str, object]:
             "tokenizer_revision",
             "preprocessing_sha256",
             "pooling",
+            "layer",
         ):
             if key in data:
-                result[key] = str(np.asarray(data[key]).reshape(-1)[0])
+                value = np.asarray(data[key]).reshape(-1)[0]
+                result[key] = int(value) if key == "layer" else str(value)
     return result
 
 
-def _feature_metadata(path: Path) -> dict[str, object]:
+def _feature_metadata(
+    path: Path,
+) -> tuple[dict[str, object], list[str]]:
     with np.load(path, allow_pickle=False) as data:
+        required = {
+            "sample_ids",
+            "feature_source",
+            "text_embeddings",
+            "image_embeddings",
+            "attribution_features",
+            "model_family",
+            "model_id",
+            "model_revision",
+            "tokenizer_revision",
+            "preprocessing_sha256",
+            "layer",
+            "pooling",
+            "id_column",
+        }
+        missing = required - set(data.files)
+        if missing:
+            raise ValueError(
+                "feature bundle lacks required provenance: "
+                + ", ".join(sorted(missing))
+            )
+        sample_ids = [
+            str(value).strip()
+            for value in np.asarray(data["sample_ids"]).reshape(-1)
+        ]
+        id_column = str(
+            np.asarray(data["id_column"]).reshape(-1)[0]
+        ).strip()
         result: dict[str, object] = {
-            "rows": int(np.asarray(data["sample_ids"]).reshape(-1).size),
+            "rows": len(sample_ids),
             "feature_source": str(
                 np.asarray(data["feature_source"]).reshape(-1)[0]
             ),
+            "model_family": str(np.asarray(data["model_family"]).reshape(-1)[0]),
+            "model_id": str(np.asarray(data["model_id"]).reshape(-1)[0]),
+            "model_revision": str(
+                np.asarray(data["model_revision"]).reshape(-1)[0]
+            ),
+            "tokenizer_revision": str(
+                np.asarray(data["tokenizer_revision"]).reshape(-1)[0]
+            ),
+            "preprocessing_sha256": str(
+                np.asarray(data["preprocessing_sha256"]).reshape(-1)[0]
+            ),
+            "layer": int(np.asarray(data["layer"]).reshape(-1)[0]),
+            "pooling": str(np.asarray(data["pooling"]).reshape(-1)[0]),
+            "id_column": id_column,
+            "sample_ids_sha256": hashlib.sha256(
+                json.dumps(
+                    sample_ids,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest(),
         }
         for key in ("text_embeddings", "image_embeddings", "attribution_features"):
             if key in data:
                 result[f"{key}_shape"] = list(np.asarray(data[key]).shape)
-    return result
+    if id_column not in {"sample_id", "variant_id"}:
+        raise ValueError("feature bundle id_column must be sample_id or variant_id")
+    if any(not value for value in sample_ids):
+        raise ValueError("feature bundle sample_ids must be non-empty")
+    if len(set(sample_ids)) != len(sample_ids):
+        raise ValueError("feature bundle sample_ids must be unique")
+    return result, sample_ids
 
 
-def _recorded_detector_threshold(row: dict[str, str]) -> float | None:
-    values = [
-        float(row[name])
-        for name in ("detector_threshold", "threshold")
-        if row.get(name, "").strip()
-    ]
-    if not values:
-        return None
-    if any(
-        not math.isclose(value, values[0], rel_tol=0.0, abs_tol=1e-12)
-        for value in values[1:]
-    ):
-        raise ValueError("score row contains conflicting threshold aliases")
-    return values[0]
+def _validate_provenance_compatibility(
+    detector: dict[str, object],
+    features: dict[str, object],
+) -> None:
+    keys = (
+        "model_family",
+        "model_id",
+        "model_revision",
+        "tokenizer_revision",
+        "preprocessing_sha256",
+        "layer",
+        "pooling",
+    )
+    missing = [key for key in keys if key not in detector]
+    if missing:
+        raise ValueError(
+            "detector lacks required provenance: " + ", ".join(missing)
+        )
+    mismatches = []
+    for key in keys:
+        detector_value = detector[key]
+        feature_value = features[key]
+        if key == "model_id":
+            detector_value = str(detector_value).replace("\\", "/")
+            feature_value = str(feature_value).replace("\\", "/")
+        if detector_value != feature_value:
+            mismatches.append(key)
+    if mismatches:
+        raise ValueError(
+            "feature provenance does not match detector: "
+            + ", ".join(mismatches)
+        )
 
 
 def _sha256(path: Path) -> str:

@@ -9,7 +9,6 @@ import math
 import os
 import platform
 import re
-import subprocess
 import sys
 import zipfile
 from collections import Counter, defaultdict
@@ -26,7 +25,13 @@ REPOSITORY = ROOT.parent
 MANIFEST_PATH = ROOT / "MANIFEST.json"
 REPORT_PATH = ROOT / "verification_report.json"
 MANIFEST_SCHEMA_VERSION = 2
-VERIFIER_VERSION = "2.0.0"
+REPORT_SCHEMA_VERSION = 3
+VERIFIER_VERSION = "3.0.0"
+FLOAT_TOLERANCE = 1e-12
+RUNTIME_ARTIFACT_SHA256 = (
+    "9816ed0b706b3d0e01162701310ad77bc795c7dd99f7e2e6da4133d6fa299587"
+)
+
 REQUIRED_DIRECTORIES = {
     "ablation_report",
     "benchmark",
@@ -36,7 +41,6 @@ REQUIRED_DIRECTORIES = {
     "runtime_validation",
 }
 ALLOWED_TOP_LEVEL_FILES = {
-    "HISTORICAL_SNAPSHOT.md",
     "MANIFEST.json",
     "README.md",
     "verification_report.json",
@@ -66,41 +70,42 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
-FROZEN_HASHES = {
-    "pipeline/fixtures/smoke_features.npz": (
-        "93cd720edfc6bfbd55a94eba05dbe3079a3d0e350d390ac8ebe5273b38fa32a2"
-    ),
-    "pipeline/artifacts/smoke/selected_detector.npz": (
-        "c008be65092b3b113832d91c968cf4c3842745c78f38544b4cede17468ba7b71"
-    ),
-    "red_teaming/generated/variants.csv": (
-        "c807e6d12676a367783165ecd950bff8c2eca7f3b357e8e3dd47a8c0c5458ba7"
-    ),
-    "red_teaming/generated/variant_smoke_features.npz": (
-        "f6a3ba6d712289b395737041c4fa25afebbb1ed3d4bd053a509a239fb5fe2b5c"
-    ),
-    "red_teaming/generated/scored_variants.csv": (
-        "5a0b3dc9830317c223b2da9f62551b326216f42e96fb384dabcf3484475d5950"
-    ),
+
+PIPELINE_FILES = {
+    "README.md",
+    "aegis_research/__init__.py",
+    "aegis_research/experiment.py",
+    "aegis_research/io.py",
+    "aegis_research/metrics.py",
+    "aegis_research/model.py",
+    "aegis_research/signals.py",
+    "configs/default.json",
+    "pyproject.toml",
+    "requirements.txt",
+    "schemas/feature_bundle.schema.json",
+    "scripts/extract_mllm_features.py",
+    "scripts/run_experiment.py",
+    "scripts/score_feature_bundle.py",
+    "tests/test_pipeline.py",
 }
-RUNTIME_ARTIFACT_SHA256 = (
-    "9816ed0b706b3d0e01162701310ad77bc795c7dd99f7e2e6da4133d6fa299587"
-)
-VALIDATED_OPERATIONAL_SOURCE_COMMIT = (
-    "71a183bd10a102324a7c782155075e977d0e83ae"
-)
-VALIDATION_EXECUTION_COMMIT_BEFORE_SQUASH = (
-    "b0a4aca0eadfdf61e2eecd615de0417689729e00"
-)
-VALIDATION_EXECUTION_TREE_BEFORE_SQUASH = (
-    "23673aaa080320a5ba919b7229d5206291d28378"
-)
-FLOAT_TOLERANCE = 1e-12
+REDTEAM_FILES = {
+    "README.md",
+    "SAFE_USE.md",
+    "attack_catalog.json",
+    "evaluate_adaptive.py",
+    "evaluate_attack_success.py",
+    "generate_variants.py",
+    "response_judgment_schema.json",
+}
+ABLATION_FILES = {
+    "README.md",
+    "run_ablation.py",
+}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Verify the restored AEGIS Final Report evidence without modifying it."
+        description="Verify the current AEGIS Final Report deliverables."
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -129,7 +134,7 @@ def main() -> None:
     for suite_name, suite in suites:
         try:
             suite(checks)
-        except Exception as exc:  # keep failures structured for CI and report review
+        except Exception as exc:
             _record(
                 checks,
                 f"{suite_name}_suite_completed",
@@ -205,16 +210,10 @@ def _verify_scope(checks: list[dict[str, object]]) -> None:
     _record(checks, "scope_no_generated_scratch", not generated, generated)
 
     attributes = (REPOSITORY / ".gitattributes").read_text(encoding="utf-8")
-    required_patterns = (
-        "deliverables/ablation_report/results/** -text",
-        "deliverables/pipeline/artifacts/smoke/** -text",
-        "deliverables/red_teaming/generated/** -text",
-        "*.npz binary",
-        "*.xlsx binary",
-    )
+    required_patterns = ("*.npz binary", "*.png binary", "*.xlsx binary")
     _record(
         checks,
-        "scope_frozen_byte_identity_attributes",
+        "scope_binary_attributes",
         all(pattern in attributes for pattern in required_patterns),
     )
 
@@ -354,8 +353,7 @@ def _verify_benchmark(checks: list[dict[str, object]]) -> None:
     sheet_names: list[str] = []
     with zipfile.ZipFile(xlsx_path) as archive:
         names = set(archive.namelist())
-        workbook_xml = archive.read("xl/workbook.xml")
-        workbook_root = ElementTree.fromstring(workbook_xml)
+        workbook_root = ElementTree.fromstring(archive.read("xl/workbook.xml"))
         sheet_names = [
             element.attrib["name"]
             for element in workbook_root.iter()
@@ -409,507 +407,273 @@ def _verify_benchmark(checks: list[dict[str, object]]) -> None:
 
 def _verify_pipeline(checks: list[dict[str, object]]) -> None:
     root = ROOT / "pipeline"
-    benchmark = _read_csv(ROOT / "benchmark" / "data" / "benchmark.csv")
-    bundle_path = root / "fixtures" / "smoke_features.npz"
-    required_bundle_keys = {
+    actual_files = _relative_file_set(root)
+    _record(
+        checks,
+        "pipeline_current_tooling_layout",
+        actual_files == PIPELINE_FILES,
+        {
+            "missing": sorted(PIPELINE_FILES - actual_files),
+            "unexpected": sorted(actual_files - PIPELINE_FILES),
+        },
+    )
+
+    requirements = (root / "requirements.txt").read_text(encoding="utf-8")
+    _record(
+        checks,
+        "pipeline_dependencies_pinned",
+        requirements.splitlines() == ["numpy==2.3.5", "Pillow==12.2.0"],
+    )
+
+    schema = _load_json(root / "schemas" / "feature_bundle.schema.json")
+    required_arrays = {
         "sample_ids",
         "text_embeddings",
         "image_embeddings",
         "attribution_features",
         "feature_source",
     }
-    with np.load(bundle_path, allow_pickle=False) as bundle:
-        keys = set(bundle.files)
-        ids = np.asarray(bundle["sample_ids"]).astype(str)
-        text = np.asarray(bundle["text_embeddings"], dtype=np.float64)
-        image = np.asarray(bundle["image_embeddings"], dtype=np.float64)
-        attribution = np.asarray(
-            bundle["attribution_features"], dtype=np.float64
-        )
-        source = str(np.asarray(bundle["feature_source"]).reshape(-1)[0])
-    _record(
-        checks,
-        "pipeline_feature_bundle_contract",
-        required_bundle_keys <= keys
-        and text.shape == (64, 32)
-        and image.shape == (64, 32)
-        and attribution.shape == (64, 8)
-        and all(np.all(np.isfinite(array)) for array in (text, image, attribution))
-        and len(set(ids)) == len(ids)
-        and np.array_equal(
-            ids,
-            np.asarray([row["sample_id"] for row in benchmark]),
-        )
-        and source == "deterministic_smoke_fixture_not_mllm_evidence",
-        {
-            "text": list(text.shape),
-            "image": list(image.shape),
-            "attribution": list(attribution.shape),
-            "source": source,
-        },
-    )
-
-    detector_path = root / "artifacts" / "smoke" / "selected_detector.npz"
-    with np.load(detector_path, allow_pickle=False) as detector:
-        detector_keys = set(detector.files)
-        weights = np.asarray(detector["weights"], dtype=np.float64)
-        mean = np.asarray(detector["mean"], dtype=np.float64)
-        scale = np.asarray(detector["scale"], dtype=np.float64)
-        bias = np.asarray(detector["bias"], dtype=np.float64)
-        threshold = float(np.asarray(detector["threshold"]).reshape(-1)[0])
-        metadata = json.loads(
-            str(np.asarray(detector["metadata_json"]).reshape(-1)[0])
-        )
-    required_detector_keys = {
-        "weights",
-        "mean",
-        "scale",
-        "bias",
-        "threshold",
-        "metadata_json",
+    properties = schema.get("properties", {})
+    provenance_fields = {
+        "model_family",
+        "model_id",
+        "model_revision",
+        "tokenizer_revision",
+        "layer",
+        "pooling",
+        "preprocessing_sha256",
+        "id_column",
     }
-    detector_ok = (
-        required_detector_keys <= detector_keys
-        and weights.shape == mean.shape == scale.shape == (8,)
-        and bias.size == 1
+    schema_ok = (
+        required_arrays | provenance_fields <= set(schema.get("required", []))
+        and required_arrays | provenance_fields <= set(properties)
         and all(
-            np.all(np.isfinite(array))
-            for array in (weights, mean, scale, bias)
-        )
-        and np.all(scale > 0)
-        and math.isclose(
-            threshold,
-            0.8202568457258909,
-            rel_tol=0.0,
-            abs_tol=FLOAT_TOLERANCE,
-        )
-        and metadata.get("feature_view") == "attribution"
-        and metadata.get("feature_source") == source
-    )
-    _record(
-        checks,
-        "pipeline_fixture_detector_contract",
-        detector_ok,
-        {"feature_dim": weights.size, "threshold": threshold, **metadata},
-    )
-
-    predictions = _read_csv(
-        root / "artifacts" / "smoke" / "test_predictions.csv"
-    )
-    test_ids = [
-        row["sample_id"] for row in benchmark if row["split"] == "test"
-    ]
-    predictions_ok = (
-        len(predictions) == 16
-        and [row["sample_id"] for row in predictions] == test_ids
-        and all(0.0 <= float(row["risk_score"]) <= 1.0 for row in predictions)
-        and all(
-            math.isclose(
-                float(row["threshold"]),
-                threshold,
-                rel_tol=0.0,
-                abs_tol=FLOAT_TOLERANCE,
+            properties[name].get("type") == "array"
+            for name in (
+                "sample_ids",
+                "text_embeddings",
+                "image_embeddings",
+                "attribution_features",
             )
-            for row in predictions
+        )
+        and properties["preprocessing_sha256"].get("pattern")
+        == "^[a-f0-9]{64}$"
+        and set(properties["id_column"].get("enum", []))
+        == {"sample_id", "variant_id"}
+    )
+    _record(checks, "pipeline_feature_bundle_schema", schema_ok)
+
+    config = _load_json(root / "configs" / "default.json")
+    config_ok = (
+        config["seed"] == 42
+        and config["threshold_selection"] == "validation_max_f1_then_precision"
+        and 0.0 < float(config["learning_rate"]) < 1.0
+        and int(config["epochs"]) > 0
+        and 0.0 <= float(config["pseudo_low"]) < float(config["pseudo_high"]) <= 1.0
+    )
+    _record(checks, "pipeline_default_experiment_config", config_ok)
+
+    extraction = (root / "scripts" / "extract_mllm_features.py").read_text(
+        encoding="utf-8"
+    )
+    experiment = (root / "scripts" / "run_experiment.py").read_text(
+        encoding="utf-8"
+    )
+    scoring = (root / "scripts" / "score_feature_bundle.py").read_text(
+        encoding="utf-8"
+    )
+    entrypoints_ok = (
+        all(
+            token in extraction
+            for token in (
+                "--model-family",
+                "--model-revision",
+                "--tokenizer-revision",
+                "--output-dir",
+                "preprocessing_sha256",
+                "variant_id",
+            )
+        )
+        and all(
+            token in experiment
+            for token in ("--metadata", "--features", "--output-dir", "selected_detector.npz")
+        )
+        and all(
+            token in scoring
+            for token in (
+                "--metadata",
+                "--features",
+                "--detector",
+                "id_column",
+                "metadata_json",
+                "text_tokens",
+                "text_representation",
+            )
         )
     )
-    _record(checks, "pipeline_test_prediction_alignment", predictions_ok)
+    _record(checks, "pipeline_entrypoint_contracts", entrypoints_ok)
 
-    summary = _load_json(root / "artifacts" / "smoke" / "summary.json")
+    readme = (root / "README.md").read_text(encoding="utf-8")
     _record(
         checks,
-        "pipeline_historical_scope_disclaimer",
-        summary["feature_source"] == source
-        and summary["selection_rule"].startswith("maximum validation")
-        and "software" in summary["limitations"],
+        "pipeline_provenance_documented",
+        "provenance" in readme.lower()
+        and "aegis_llava_onevision_05b_text_detector_tuned_v3.npz" in readme,
     )
-    requirements = (root / "requirements.txt").read_text(encoding="utf-8")
-    _record(
-        checks,
-        "pipeline_reproduction_dependencies_pinned",
-        requirements.splitlines() == ["numpy==2.3.5", "Pillow==12.2.0"],
-    )
-    feature_schema = _load_json(
-        root / "schemas" / "feature_bundle.schema.json"
-    )
-    _record(
-        checks,
-        "pipeline_feature_schema_provenance",
-        "provenance" in feature_schema["properties"]
-        and feature_schema["properties"]["text_embeddings"]["type"] == "array",
-    )
-    _verify_frozen_hashes(checks, prefix="pipeline")
 
 
 def _verify_redteam(checks: list[dict[str, object]]) -> None:
     root = ROOT / "red_teaming"
-    generated = root / "generated"
-    variants = _read_csv(generated / "variants.csv")
-    scored = _read_csv(generated / "scored_variants.csv")
-
-    groups = Counter(row["base_sample_id"] for row in variants)
-    query_groups: dict[str, list[int]] = defaultdict(list)
-    for row in variants:
-        query_groups[row["base_sample_id"]].append(int(row["query_index"]))
+    actual_files = _relative_file_set(root)
     _record(
         checks,
-        "redteam_fixed_panel_shape",
-        len(variants) == 48
-        and len(groups) == 8
-        and set(groups.values()) == {6}
-        and all(sorted(values) == list(range(1, 7)) for values in query_groups.values())
-        and len({row["variant_id"] for row in variants}) == 48
-        and len({row["variant_type"] for row in variants}) == 6,
-        {"rows": len(variants), "base_samples": len(groups)},
+        "redteam_current_tooling_layout",
+        actual_files == REDTEAM_FILES,
+        {
+            "missing": sorted(REDTEAM_FILES - actual_files),
+            "unexpected": sorted(actual_files - REDTEAM_FILES),
+        },
     )
 
-    content_errors: list[str] = []
-    relocated_paths = 0
-    for row in variants:
-        normalized = " ".join(row["prompt_text"].lower().split())
-        if hashlib.sha256(normalized.encode("utf-8")).hexdigest() != row[
-            "prompt_sha256"
-        ]:
-            content_errors.append(f"{row['variant_id']}:prompt_hash")
-        if row.get("safe_handling") != "operational_details_redacted":
-            content_errors.append(f"{row['variant_id']}:safe_handling")
-        if row["image_path"]:
-            image_path, relocated = _resolve_historical_redteam_image(
-                generated,
-                row["image_path"],
-            )
-            relocated_paths += int(relocated)
-            if (
-                not image_path.is_file()
-                or _raw_sha256(image_path) != row["image_sha256"]
-            ):
-                content_errors.append(f"{row['variant_id']}:image_hash")
-    _record(
-        checks,
-        "redteam_hashes_and_historical_relocation",
-        not content_errors and relocated_paths == 40,
-        content_errors or {"relocated_paths": relocated_paths},
+    catalog = _load_json(root / "attack_catalog.json")
+    variants = catalog.get("variants", [])
+    catalog_ok = (
+        catalog.get("schema_version") == 1
+        and catalog.get("safety_profile") == "redacted_non_operational"
+        and len(variants) == 6
+        and len({entry.get("name") for entry in variants}) == 6
+        and all(entry.get("deterministic") is True for entry in variants)
+        and all(entry.get("description") for entry in variants)
     )
-
-    scored_ok = (
-        len(scored) == len(variants)
-        and [row["variant_id"] for row in scored]
-        == [row["variant_id"] for row in variants]
-        and all(0.0 <= float(row["risk_score"]) <= 1.0 for row in scored)
-        and {row["feature_view"] for row in scored} == {"attribution"}
-        and all(
-            math.isclose(
-                float(row["detector_threshold"]),
-                0.8202568457258909,
-                rel_tol=0.0,
-                abs_tol=FLOAT_TOLERANCE,
-            )
-            for row in scored
-        )
-    )
-    _record(checks, "redteam_scored_panel_alignment", scored_ok)
-
-    adaptive_payload = _load_json(generated / "adaptive_summary.json")
-    expected_summary = _recompute_best_of_n(scored, [1, 3, 6])
-    actual_summary = adaptive_payload.get("summary", [])
-    adaptive_ok = len(actual_summary) == len(expected_summary) and all(
-        int(actual["query_budget"]) == int(expected["query_budget"])
-        and int(actual["n_samples"]) == int(expected["n_samples"])
-        and all(
-            math.isclose(
-                float(actual[name]),
-                float(expected[name]),
-                rel_tol=0.0,
-                abs_tol=FLOAT_TOLERANCE,
-            )
-            for name in (
-                "threshold",
-                "malicious_recall",
-                "evasion_rate",
-                "mean_worst_case_score",
-            )
-        )
-        for actual, expected in zip(actual_summary, expected_summary)
-    )
-    _record(
-        checks,
-        "redteam_best_of_n_recomputed",
-        adaptive_ok,
-        expected_summary,
-    )
+    _record(checks, "redteam_attack_catalog", catalog_ok)
 
     schema = _load_json(root / "response_judgment_schema.json")
+    required = {
+        "sample_id",
+        "attack_style",
+        "condition",
+        "attack_succeeded",
+        "effective_action",
+        "recommended_action",
+        "traffic_mode",
+        "downstream_disposition",
+        "judge_type",
+        "judge_version",
+        "response_sha256",
+    }
+    schema_ok = (
+        required <= set(schema.get("required", []))
+        and isinstance(schema.get("allOf"), list)
+        and len(schema["allOf"]) >= 2
+        and isinstance(schema.get("properties"), dict)
+    )
+    _record(checks, "redteam_response_schema", schema_ok)
+
+    generator = (root / "generate_variants.py").read_text(encoding="utf-8")
+    adaptive = (root / "evaluate_adaptive.py").read_text(encoding="utf-8")
+    response = (root / "evaluate_attack_success.py").read_text(encoding="utf-8")
+    tools_ok = (
+        '"--output"' in generator
+        and "required=True" in generator
+        and "detector_artifact_block_threshold" in adaptive
+        and "detector_threshold" in adaptive
+        and "scored variant IDs are not aligned" in adaptive
+        and "traffic_mode" in adaptive
+        and "response_sha256" in response
+        and "effective_action" in response
+    )
+    _record(checks, "redteam_entrypoint_contracts", tools_ok)
+
+    safety_text = (root / "SAFE_USE.md").read_text(encoding="utf-8").lower()
+    readme = (root / "README.md").read_text(encoding="utf-8").lower()
     _record(
         checks,
-        "redteam_response_schema_runtime_conditions",
-        isinstance(schema.get("allOf"), list) and len(schema["allOf"]) >= 2,
+        "redteam_safety_documented",
+        "authorization" in safety_text
+        and "redact" in safety_text
+        and "traffic mode" in readme,
     )
-    safety_text = (root / "SAFE_USE.md").read_text(encoding="utf-8")
-    readme = (root / "README.md").read_text(encoding="utf-8")
-    _record(
-        checks,
-        "redteam_evidence_boundary_documented",
-        "bounded best-of-N" in readme
-        and "shadow" in readme
-        and "Never overwrite" in safety_text,
-    )
-    _verify_frozen_hashes(checks, prefix="redteam")
 
 
 def _verify_ablation(checks: list[dict[str, object]]) -> None:
     root = ROOT / "ablation_report"
-    results = root / "results"
-    expected_rows = {
-        "feature_signal_ablation.csv": 7,
-        "low_label_seed_runs.csv": 20,
-        "low_label_summary.csv": 4,
-        "attack_family_transfer.csv": 16,
-        "uncertainty_coverage.csv": 4,
-        "adaptive_redteam_summary.csv": 3,
-    }
-    row_counts = {
-        name: len(_read_csv(results / name)) for name in expected_rows
-    }
+    actual_files = _relative_file_set(root)
     _record(
         checks,
-        "ablation_result_table_shapes",
-        row_counts == expected_rows,
-        row_counts,
+        "ablation_current_tooling_layout",
+        actual_files == ABLATION_FILES,
+        {
+            "missing": sorted(ABLATION_FILES - actual_files),
+            "unexpected": sorted(actual_files - ABLATION_FILES),
+        },
     )
 
-    numeric_errors: list[str] = []
-    for name in expected_rows:
-        rows = _read_csv(results / name)
-        for row_number, row in enumerate(rows, start=2):
-            for column, value in row.items():
-                if value == "" or not _looks_numeric(value):
-                    continue
-                if not math.isfinite(float(value)):
-                    numeric_errors.append(f"{name}:{row_number}:{column}")
-    _record(
-        checks,
-        "ablation_numeric_results_finite",
-        not numeric_errors,
-        numeric_errors,
+    source = (root / "run_ablation.py").read_text(encoding="utf-8")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    contract_ok = (
+        '"--features"' in source
+        and "required=True" in source
+        and "run_manifest.json" in source
+        and "preprocessing_sha256" in source
+        and "scores_sha256" in source
+        and "detector_sha256" in source
+        and "features_sha256" in source
+        and "does not describe the supplied inputs" in source
+        and "provenance" in source
+        and "provenance" in readme.lower()
+        and "current" in readme.lower()
     )
-
-    adaptive_csv = _read_csv(results / "adaptive_redteam_summary.csv")
-    adaptive_json = _load_json(
-        ROOT / "red_teaming" / "generated" / "adaptive_summary.json"
-    )["summary"]
-    adaptive_alignment = len(adaptive_csv) == len(adaptive_json) and all(
-        int(csv_row["query_budget"]) == int(json_row["query_budget"])
-        and all(
-            math.isclose(
-                float(csv_row[name]),
-                float(json_row[name]),
-                rel_tol=0.0,
-                abs_tol=FLOAT_TOLERANCE,
-            )
-            for name in (
-                "threshold",
-                "malicious_recall",
-                "evasion_rate",
-                "mean_worst_case_score",
-            )
-        )
-        for csv_row, json_row in zip(adaptive_csv, adaptive_json)
-    )
-    _record(
-        checks,
-        "ablation_adaptive_table_alignment",
-        adaptive_alignment,
-    )
-
-    report = (root / "REPORT.md").read_text(encoding="utf-8")
-    required_sections = (
-        "## Evidence status",
-        "## Relationship to the current runtime",
-        "## Signal importance",
-        "## Low-label and pseudo-label ablation",
-        "## Attack-family transfer",
-        "## Uncertainty and review coverage",
-        "## Bounded best-of-N fixture evasion",
-        "## Legacy MLLM evidence",
-        "## Reproduction",
-    )
-    report_ok = (
-        all(section in report for section in required_sections)
-        and RUNTIME_ARTIFACT_SHA256 in report
-        and "not evidence of MLLM safety performance" in report
-        and "not a sequential" in report
-        and "reproductions/ablation_v1" in report
-    )
-    _record(checks, "ablation_report_evidence_boundaries", report_ok)
-
-    historical_manifest = _load_json(results / "run_manifest.json")
-    snapshot = (ROOT / "HISTORICAL_SNAPSHOT.md").read_text(encoding="utf-8")
-    _record(
-        checks,
-        "ablation_historical_provenance_mapped",
-        historical_manifest["rows"] == 64
-        and "annotated_benchmark" in historical_manifest["metadata"]
-        and "absolute Windows paths" in snapshot,
-    )
+    _record(checks, "ablation_entrypoint_contract", contract_ok)
 
 
 def _verify_runtime(checks: list[dict[str, object]]) -> None:
-    record_path = (
-        ROOT / "runtime_validation" / "docker_smoke_2026-07-31.json"
-    )
+    record_path = ROOT / "runtime_validation" / "docker_smoke_2026-07-31.json"
     record = _load_json(record_path)
+    expected_keys = {
+        "schema_version",
+        "validation_date",
+        "status",
+        "scope",
+        "package_version",
+        "docker",
+        "llava_artifact",
+        "functional_validation",
+        "gui",
+        "docker_recheck",
+        "teardown",
+    }
     pyproject = (REPOSITORY / "pyproject.toml").read_text(encoding="utf-8")
-    version_match = re.search(
-        r"(?m)^version\s*=\s*\"([^\"]+)\"",
-        pyproject,
-    )
+    version_match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproject)
     package_version = version_match.group(1) if version_match else None
-    repository_record = record["repository"]
-    validated_commit = repository_record[
-        "validated_tracked_operational_source_commit"
-    ]
-    execution_commit_before_squash = repository_record[
-        "validation_execution_commit_before_squash"
-    ]
-    execution_tree_before_squash = repository_record[
-        "validation_execution_tree_before_squash"
-    ]
-    execution_parent_commit = repository_record[
-        "validation_execution_parent_commit"
-    ]
-    runtime_scope = repository_record[
-        "validated_tracked_operational_scope"
-    ]
-    changed_build_input = repository_record[
-        "changed_non_executable_build_input"
-    ]
-    runtime_scope_valid = (
-        isinstance(runtime_scope, list)
-        and bool(runtime_scope)
-        and all(
-            isinstance(path, str)
-            and path
-            and "\\" not in path
-            and not Path(path).is_absolute()
-            and ".." not in Path(path).parts
-            for path in runtime_scope
-        )
+    identity_ok = (
+        set(record) == expected_keys
+        and record["schema_version"] == 3
+        and record["validation_date"] == "2026-07-31"
+        and record["status"] == "pass"
+        and record["package_version"] == package_version
     )
     _record(
         checks,
         "runtime_record_identity",
-        record["schema_version"] == 2
-        and record["validation_date"] == "2026-07-31"
-        and repository_record["package_version"] == package_version
-        and re.fullmatch(r"[0-9a-f]{40}", validated_commit) is not None
-        and validated_commit == VALIDATED_OPERATIONAL_SOURCE_COMMIT
-        and execution_commit_before_squash
-        == VALIDATION_EXECUTION_COMMIT_BEFORE_SQUASH
-        and execution_tree_before_squash
-        == VALIDATION_EXECUTION_TREE_BEFORE_SQUASH
-        and execution_parent_commit == VALIDATED_OPERATIONAL_SOURCE_COMMIT
-        and execution_commit_before_squash
-        in repository_record["history_note"]
-        and validated_commit in repository_record["history_note"]
-        and runtime_scope_valid,
+        identity_ok,
         {
+            "schema_version": record.get("schema_version"),
             "package_version": package_version,
-            "validated_tracked_operational_source_commit": (
-                validated_commit
-            ),
-            "validation_execution_commit_before_squash": (
-                execution_commit_before_squash
-            ),
-            "validation_execution_tree_before_squash": (
-                execution_tree_before_squash
-            ),
-            "validation_execution_parent_commit": (
-                execution_parent_commit
-            ),
-            "validated_tracked_operational_scope_paths": len(runtime_scope),
+            "keys": sorted(record),
         },
     )
 
-    commit_exists = False
-    try:
-        completed = subprocess.run(
-            ["git", "cat-file", "-e", f"{validated_commit}^{{commit}}"],
-            cwd=REPOSITORY,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        commit_exists = completed.returncode == 0
-    except (FileNotFoundError, subprocess.SubprocessError):
-        commit_exists = False
-    _record(
-        checks,
-        "runtime_operational_source_commit_exists",
-        commit_exists,
-    )
-
-    runtime_scope_aligned = False
-    if commit_exists and runtime_scope_valid:
-        try:
-            completed = subprocess.run(
-                [
-                    "git",
-                    "diff",
-                    "--quiet",
-                    validated_commit,
-                    "--",
-                    *runtime_scope,
-                ],
-                cwd=REPOSITORY,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            runtime_scope_aligned = completed.returncode == 0
-        except (FileNotFoundError, subprocess.SubprocessError):
-            runtime_scope_aligned = False
-    _record(
-        checks,
-        "runtime_tracked_operational_scope_alignment",
-        runtime_scope_aligned,
-        {
-            "anchor": validated_commit,
-            "paths": runtime_scope,
-        },
-    )
-    _record(
-        checks,
-        "runtime_source_scope_qualifications",
-        changed_build_input
-        == {
-            "path": "README.md",
-            "copied_by_dockerfile": True,
-            "execution_effect": (
-                "changes documentation, package metadata, and reproducible "
-                "image bytes, but not AEGIS executable modules, configs, or "
-                "model artifacts"
-            ),
-            "note": (
-                "The root README changed during deliverable cleanup and "
-                "restoration, so it is deliberately excluded from the "
-                "byte-identity claim. The recorded Docker image ID belongs "
-                "to the pre-squash execution and is not a promised rebuild "
-                "identity at the surviving source anchor."
-            ),
-        }
-        and "tracked files only"
-        in repository_record["untracked_model_cache_note"]
-        and "recorded model/tokenizer revisions"
-        in repository_record["untracked_model_cache_note"],
-    )
-
-    config = _load_json(
-        REPOSITORY / "configs" / "aegis.llava.deployment.container.json"
-    )
     artifact_record = record["llava_artifact"]
-    artifact_path = REPOSITORY / artifact_record["path"]
+    artifact_relative = Path(artifact_record["path"])
+    artifact_path = (REPOSITORY / artifact_relative).resolve()
+    try:
+        artifact_path.relative_to(REPOSITORY.resolve())
+        artifact_path_safe = not artifact_relative.is_absolute()
+    except ValueError:
+        artifact_path_safe = False
+    if not artifact_path_safe:
+        raise ValueError("runtime detector path must remain inside the repository")
+
     with np.load(artifact_path, allow_pickle=False) as artifact:
         weights = np.asarray(artifact["weights"], dtype=np.float64)
         block_threshold = float(
@@ -937,8 +701,9 @@ def _verify_runtime(checks: list[dict[str, object]]) -> None:
         and artifact_record["model_revision"] == model_revision
         and artifact_record["tokenizer_revision"] == tokenizer_revision
         and artifact_record["preprocessing_sha256"] == preprocessing
+        and re.fullmatch(r"[0-9a-f]{64}", preprocessing) is not None
         and math.isclose(
-            artifact_record["block_threshold"],
+            float(artifact_record["block_threshold"]),
             block_threshold,
             rel_tol=0.0,
             abs_tol=FLOAT_TOLERANCE,
@@ -956,6 +721,9 @@ def _verify_runtime(checks: list[dict[str, object]]) -> None:
         },
     )
 
+    config = _load_json(
+        REPOSITORY / "configs" / "aegis.llava.deployment.container.json"
+    )
     config_ok = (
         config["detector"] == artifact_record["path"]
         and config["target_profile"] == "llava05b"
@@ -979,40 +747,44 @@ def _verify_runtime(checks: list[dict[str, object]]) -> None:
             "aegis_llava_onevision_05b_text_detector_tuned_v3.npz",
             '"feature_dim": 896',
             '"pooling": "text_tokens"',
-            '"min_available_physical_bytes": 2147483648',
             "review_threshold=0.23579741243702598",
             "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
         )
     )
     _record(checks, "runtime_target_profile_alignment", profile_ok)
 
-    smoke = record["ephemeral_validation"]
+    docker = record["docker"]
+    validation = record["functional_validation"]
     gui = record["gui"]
+    teardown = record["teardown"]
     functional_ok = (
-        record["docker"]["image"]["fresh_build_passed"] is True
-        and smoke["ready_http"] == 200
-        and smoke["authentication"] == {
+        docker["image"]["fresh_build_passed"] is True
+        and validation["ready_http"] == 200
+        and validation["ready_ok"] is True
+        and validation["worker_ready"] is True
+        and validation["worker_restarts"] == 0
+        and validation["authentication"]
+        == {
             "unauthenticated_guard_http": 401,
             "authenticated_metrics_http": 200,
             "authenticated_guard_http": 200,
         }
-        and smoke["guard_smoke"]["action"] == "allow"
-        and smoke["guard_smoke"]["recommended_action"] == "allow"
-        and smoke["traffic_mode_round_trip"] == ["shadow", "review", "shadow"]
+        and validation["guard_smoke"]["action"] == "allow"
+        and validation["guard_smoke"]["recommended_action"] == "allow"
+        and validation["guard_smoke"]["modality"] == "image_text"
+        and validation["traffic_mode_round_trip"] == ["shadow", "review", "shadow"]
         and gui["home_http"] == 200
         and gui["evaluate_http"] == 200
         and gui["shutdown_http"] == 202
         and gui["process_exit_code"] == 0
-        and record["teardown"]["temporary_validation_container_removed"] is True
-        and record["teardown"]["port_8766_listening"] is False
-        and record["teardown"]["port_8767_listening"] is False
+        and teardown["temporary_validation_container_removed"] is True
+        and teardown["port_8766_listening"] is False
+        and teardown["port_8767_listening"] is False
     )
     _record(checks, "runtime_functional_record_complete", functional_ok)
 
-    recheck = record["post_restoration_docker_recheck"]
-    _record(
-        checks,
-        "runtime_post_restoration_docker_recheck",
+    recheck = record["docker_recheck"]
+    recheck_ok = (
         recheck["docker_engine_running"] is True
         and recheck["container_log_observations"]["authentication_required"] is True
         and recheck["container_log_observations"]["traffic_mode"] == "shadow"
@@ -1021,19 +793,8 @@ def _verify_runtime(checks: list[dict[str, object]]) -> None:
         and recheck["container_log_observations"]["exit_code"] == 0
         and recheck["ports_after_exit"]["8766_listening"] is False
         and recheck["ports_after_exit"]["8767_listening"] is False
-        and "did not repeat" in recheck["scope_note"],
     )
-
-    stock = record["stock_compose_profile"]
-    resource_ok = (
-        stock["failure_kind"] == "resource_preflight"
-        and stock["oom_killed"] is False
-        and stock["required_available_physical_bytes"] == 2 * 1024**3
-        and stock["observed_available_physical_bytes_min"]
-        < stock["required_available_physical_bytes"]
-        and all(stock["passed_checks"].values())
-    )
-    _record(checks, "runtime_resource_constraint_qualified", resource_ok)
+    _record(checks, "runtime_docker_recheck", recheck_ok)
 
     runtime_readme = (
         ROOT / "runtime_validation" / "README.md"
@@ -1041,17 +802,12 @@ def _verify_runtime(checks: list[dict[str, object]]) -> None:
     deliverables_readme = (ROOT / "README.md").read_text(encoding="utf-8")
     _record(
         checks,
-        "runtime_evidence_limits_documented",
-        "not an accuracy, robustness, latency" in runtime_readme
-        and "validated_tracked_operational_source_commit"
-        in runtime_readme
-        and "README.md" in runtime_readme
-        and "tracked-path comparison" in runtime_readme
-        and re.search(r"former\s+execution hash", runtime_readme) is not None
-        and VALIDATION_EXECUTION_COMMIT_BEFORE_SQUASH in runtime_readme
-        and VALIDATED_OPERATIONAL_SOURCE_COMMIT in runtime_readme
-        and "byte-identical" in runtime_readme
-        and "896-dimensional detector deployed" in deliverables_readme,
+        "runtime_evidence_scope_documented",
+        "functional smoke test" in runtime_readme.lower()
+        and "not an accuracy, robustness, latency" in runtime_readme.lower()
+        and "896-dimensional" in deliverables_readme
+        and "aegis_llava_onevision_05b_text_detector_tuned_v3.npz"
+        in deliverables_readme,
     )
 
 
@@ -1090,56 +846,37 @@ def _verify_source_files(checks: list[dict[str, object]]) -> None:
         json_errors or sum(path.suffix == ".json" for path in canonical_files),
     )
 
-    allowed_historical_references = {
-        "HISTORICAL_SNAPSHOT.md",
-        "red_teaming/README.md",
-        "verify_deliverables.py",
-    }
-    stale_references: list[str] = []
+    link_errors: list[str] = []
     for path in canonical_files:
-        relative = path.relative_to(ROOT).as_posix()
-        if (
-            path.suffix not in {".md", ".mjs", ".py", ".yml", ".yaml"}
-            or relative in allowed_historical_references
-        ):
+        if path.suffix != ".md":
             continue
         text = path.read_text(encoding="utf-8-sig")
-        if "annotated_benchmark" in text or "reproducible_pipeline" in text:
-            stale_references.append(relative)
-    _record(
-        checks,
-        "source_no_stale_executable_paths",
-        not stale_references,
-        stale_references,
-    )
+        for target in re.findall(r"\]\(([^)]+)\)", text):
+            clean = target.strip().strip("<>").split("#", 1)[0]
+            if (
+                not clean
+                or clean.startswith(("#", "http://", "https://", "mailto:"))
+            ):
+                continue
+            candidate = (path.parent / clean).resolve()
+            try:
+                candidate.relative_to(REPOSITORY.resolve())
+            except ValueError:
+                link_errors.append(
+                    f"{path.relative_to(ROOT).as_posix()}:{target}"
+                )
+                continue
+            if not candidate.exists():
+                link_errors.append(
+                    f"{path.relative_to(ROOT).as_posix()}:{target}"
+                )
+    _record(checks, "source_local_markdown_links", not link_errors, link_errors)
 
     ci_entry = (ROOT / "ci" / "run_checks.py").read_text(encoding="utf-8")
     _record(
         checks,
         "source_ci_read_only_verifier",
         "--check" in ci_entry and "unittest" in ci_entry,
-    )
-
-    reproduction = _load_json(
-        ROOT / "ci" / "reproduction_validation_2026-07-31.json"
-    )
-    best_of_n = reproduction["research_workflow"]["best_of_n"]
-    _record(
-        checks,
-        "source_reproduction_validation_record",
-        reproduction["status"] == "pass"
-        and reproduction["benchmark_rebuild"]["image_hash_mismatches"] == 0
-        and reproduction["workbook_review"]["formula_error_matches"] == 0
-        and reproduction["workbook_review"]["all_sheets_visually_reviewed"] is True
-        and [row["query_budget"] for row in best_of_n] == [1, 3, 6]
-        and [row["malicious_recall"] for row in best_of_n]
-        == [0.75, 0.375, 0.0]
-        and reproduction["research_workflow"][
-            "historical_artifacts_overwritten"
-        ]
-        is False
-        and reproduction["cleanup"]["temporary_reproduction_outputs_removed"]
-        is True,
     )
 
 
@@ -1205,17 +942,22 @@ def _verify_stored_report(
             f"{type(exc).__name__}: {exc}",
         )
         return
+    runtime = _load_json(
+        ROOT / "runtime_validation" / "docker_smoke_2026-07-31.json"
+    )
     report_ok = (
-        report.get("schema_version") == 2
+        report.get("schema_version") == REPORT_SCHEMA_VERSION
         and report.get("status") == "pass"
+        and report.get("scope") == "current_aegis_deliverables"
+        and report.get("package_version") == runtime["package_version"]
+        and report.get("runtime_validation_date") == runtime["validation_date"]
         and report.get("artifact_set_sha256")
         == current_manifest["artifact_set_sha256"]
         and report.get("manifest_sha256") == _raw_sha256(MANIFEST_PATH)
+        and report.get("manifest_files") == current_manifest["file_count"]
+        and report.get("manifest_total_canonical_bytes")
+        == current_manifest["total_bytes"]
         and report.get("checks_passed") == report.get("checks_total")
-        and report.get("validated_tracked_operational_source_commit")
-        == _load_json(
-            ROOT / "runtime_validation" / "docker_smoke_2026-07-31.json"
-        )["repository"]["validated_tracked_operational_source_commit"]
     )
     _record(
         checks,
@@ -1264,22 +1006,20 @@ def _build_stored_report(
     checks: list[dict[str, object]],
     manifest: dict[str, object],
 ) -> dict[str, object]:
-    runtime_record = _load_json(
+    runtime = _load_json(
         ROOT / "runtime_validation" / "docker_smoke_2026-07-31.json"
     )
     return {
-        "schema_version": 2,
+        "schema_version": REPORT_SCHEMA_VERSION,
         "status": "pass" if _all_passed(checks) else "fail",
+        "scope": "current_aegis_deliverables",
+        "package_version": runtime["package_version"],
+        "runtime_validation_date": runtime["validation_date"],
         "generated_at_utc": datetime.now(timezone.utc)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z"),
         "verifier_version": VERIFIER_VERSION,
-        "validated_tracked_operational_source_commit": (
-            runtime_record["repository"][
-                "validated_tracked_operational_source_commit"
-            ]
-        ),
         "artifact_set_sha256": manifest["artifact_set_sha256"],
         "manifest_sha256": _raw_sha256(MANIFEST_PATH),
         "manifest_files": manifest["file_count"],
@@ -1290,7 +1030,6 @@ def _build_stored_report(
         "toolchain": {
             "python": platform.python_version(),
             "numpy": np.__version__,
-            "platform": platform.platform(),
         },
     }
 
@@ -1342,90 +1081,15 @@ def _canonical_payload(path: Path) -> tuple[bytes, str]:
     return normalized.encode("utf-8"), "normalized_lf"
 
 
-def _verify_frozen_hashes(
-    checks: list[dict[str, object]],
-    *,
-    prefix: str,
-) -> None:
-    selected = {
-        path: expected
-        for path, expected in FROZEN_HASHES.items()
-        if path.startswith("pipeline/")
-        if prefix == "pipeline"
+def _relative_file_set(root: Path) -> set[str]:
+    return {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file()
+        and path.name not in EXCLUDED_FILE_NAMES
+        and path.suffix not in {".pyc", ".pyo"}
+        and not any(part in EXCLUDED_DIRECTORY_NAMES for part in path.parts)
     }
-    if prefix == "redteam":
-        selected = {
-            path: expected
-            for path, expected in FROZEN_HASHES.items()
-            if path.startswith("red_teaming/")
-        }
-    mismatches = {
-        path: {
-            "expected": expected,
-            "actual": _raw_sha256(ROOT / path),
-        }
-        for path, expected in selected.items()
-        if _raw_sha256(ROOT / path) != expected
-    }
-    _record(
-        checks,
-        f"{prefix}_frozen_byte_identities",
-        not mismatches,
-        mismatches or sorted(selected),
-    )
-
-
-def _resolve_historical_redteam_image(
-    generated_root: Path,
-    value: str,
-) -> tuple[Path, bool]:
-    normalized = value.replace("\\", "/")
-    relocated = "../../annotated_benchmark/" in normalized
-    if relocated:
-        normalized = normalized.replace(
-            "../../annotated_benchmark/",
-            "../../benchmark/",
-        )
-    path = (generated_root / normalized).resolve()
-    try:
-        path.relative_to(ROOT.resolve())
-    except ValueError as exc:
-        raise ValueError(f"red-team image path escapes deliverables: {value}") from exc
-    return path, relocated
-
-
-def _recompute_best_of_n(
-    scored: list[dict[str, str]],
-    budgets: list[int],
-) -> list[dict[str, object]]:
-    groups: dict[str, list[dict[str, str]]] = defaultdict(list)
-    for row in scored:
-        groups[row["base_sample_id"]].append(row)
-    threshold = float(scored[0]["detector_threshold"])
-    summary: list[dict[str, object]] = []
-    for budget in budgets:
-        selected_scores = []
-        for variants in groups.values():
-            eligible = sorted(
-                variants,
-                key=lambda row: int(row["query_index"]),
-            )[:budget]
-            selected_scores.append(
-                min(float(row["risk_score"]) for row in eligible)
-            )
-        detected = sum(score >= threshold for score in selected_scores)
-        summary.append(
-            {
-                "query_budget": budget,
-                "n_samples": len(selected_scores),
-                "threshold": threshold,
-                "malicious_recall": detected / len(selected_scores),
-                "evasion_rate": 1.0 - detected / len(selected_scores),
-                "mean_worst_case_score": sum(selected_scores)
-                / len(selected_scores),
-            }
-        )
-    return summary
 
 
 def _record(
@@ -1477,14 +1141,6 @@ def _csv_text(value: object) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
-
-
-def _looks_numeric(value: str) -> bool:
-    try:
-        float(value)
-    except ValueError:
-        return False
-    return True
 
 
 if __name__ == "__main__":

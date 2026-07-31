@@ -7,7 +7,7 @@
 - Use bounded query budgets and preserve every transformation, seed, corpus/panel hash,
   feature-bundle hash, detector path and hash, model/tokenizer revision, preprocessing
   hash, threshold value and semantics, traffic mode, and selection rule.
-- Never overwrite a historical score panel or reuse its filename for a different
+- Never overwrite an existing score panel or reuse its filename for a different
   detector, threshold, model revision, preprocessing pipeline, or traffic mode.
 - Distinguish effective runtime action from recommended action. In shadow mode,
   threshold-based blocking is counterfactual unless a downstream system actually

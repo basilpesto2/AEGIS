@@ -13,11 +13,10 @@ AEGIS does not answer the prompt or automatically forward it to another model. Y
 application sends the prompt to AEGIS first, reads the decision, and decides what to
 do next.
 
-Final Report evidence—including the annotated benchmark, research pipeline,
-red-team fixtures, ablation results, and current runtime-validation record—is
-preserved under [`deliverables/`](deliverables/README.md). These artifacts document
-the work completed; they are intentionally separate from the files required to
-install and operate the CLI, service, or GUI.
+Final Report material—including the annotated benchmark, current research and
+red-teaming tools, ablation workflow, and runtime-validation record—is available
+under [`deliverables/`](deliverables/README.md). It documents the current project
+without being required to install or operate the CLI, service, or GUI.
 
 ## Start here if you are new
 

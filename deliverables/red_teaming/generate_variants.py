@@ -16,7 +16,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_BENCHMARK = ROOT.parent / "benchmark" / "data" / "benchmark.csv"
-DEFAULT_OUTPUT = ROOT / "generated" / "variants.csv"
 VARIANTS = (
     "role_play_wrapper",
     "leetspeak",
@@ -30,7 +29,12 @@ VARIANTS = (
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a deterministic redacted red-team panel.")
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_BENCHMARK)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="New, run-specific CSV path for the generated panel.",
+    )
     parser.add_argument("--split", default="test", choices=("train", "validation", "test", "all"))
     parser.add_argument("--variants", nargs="+", choices=VARIANTS, default=list(VARIANTS))
     parser.add_argument("--force", action="store_true")

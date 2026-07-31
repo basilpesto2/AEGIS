@@ -1,45 +1,32 @@
 # AEGIS research and validation deliverables
 
-This directory preserves the evidence used to design, test, and evaluate AEGIS. It is
-required research documentation for the Final Report, but it is intentionally separate
-from the files needed to install and run the CLI, service, or GUI.
-
-The current repository package is AEGIS `0.3.0`. The research evidence and the deployed
-runtime do not all make the same kind of claim, so each artifact is labelled by its
-evidence boundary.
+This directory contains the material that represents AEGIS `0.3.0`.
+It is separate from the files required to install and run the CLI, service, or GUI.
+Only current datasets, reusable evaluation tools, and validation records are retained.
 
 | Subdirectory | Deliverable | Evidence boundary |
 | --- | --- | --- |
-| `benchmark/` | Balanced, synthetic, safety-redacted multimodal benchmark; annotations, schema, generated images, CSV/JSON data, and Excel workbook. | Dataset and annotation evidence; not a production-safety claim. |
-| `pipeline/` | Feature-bundle contract, detector training, low-label learning, evaluation, and tests. | Deterministic software-smoke results unless a provenance-complete MLLM bundle is supplied. |
-| `red_teaming/` | Bounded, safety-redacted attack generation and adaptive detector-evasion evaluation. | Detector robustness evidence; no harmful model responses are stored. |
-| `ablation_report/` | Executable ablation protocol, aggregate smoke results, transfer analysis, and historical aggregate context. | Committed tables use deterministic smoke features; legacy MLLM aggregates are not independently reproducible. |
-| `runtime_validation/` | Sanitized Docker, API, inference, GUI, and resource-preflight observations from 2026-07-31. | Live validation of the current packaged LLaVA runtime on the recorded machine. |
-| `ci/` | Portable pipeline unit tests and deliverable-integrity verification. | Research-artifact CI, separate from product runtime tests. |
-
-`HISTORICAL_SNAPSHOT.md` records the original fixture hashes, obsolete embedded path
-names, and the exact boundary between preserved historical results and current runtime
-evidence.
+| `benchmark/` | Balanced, synthetic, safety-redacted multimodal benchmark; annotations, schema, images, CSV/JSON data, and Excel workbook. | Dataset and annotation evidence; not a production-safety claim. |
+| `pipeline/` | Provenance-aware MLLM feature extraction, detector training, scoring, and unit tests. | Results are reportable only when generated from a current, provenance-complete feature bundle. |
+| `red_teaming/` | Safety-redacted variant generation and bounded detector-evasion evaluation. | Tools only; no detector robustness result is committed. |
+| `ablation_report/` | Executable signal-importance, low-label, uncertainty, and transfer-analysis workflow. | Tools only; reports must be generated from an explicitly supplied current feature bundle. |
+| `runtime_validation/` | Sanitized Docker, API, inference, and GUI observations from the current packaged LLaVA runtime. | Functional validation; not an accuracy, robustness, latency, or capacity benchmark. |
+| `ci/` | Portable research-tool unit tests and deliverable-integrity verification. | Research-artifact CI, separate from product runtime tests. |
 
 ## Current runtime relationship
 
-- The bundled LLaVA target now uses
-  `models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz`, with a
-  validation-selected block threshold of `0.6909739881800183` and review threshold of
-  `0.23579741243702598`.
-- The committed pipeline smoke detector in
-  `pipeline/artifacts/smoke/selected_detector.npz` is an 8-dimensional deterministic
-  fixture artifact. It proves that the research pipeline executes; it is not the
-  896-dimensional detector deployed by the LLaVA service.
-- The current CLI, authenticated API, CUDA-backed LLaVA inference, runtime traffic-mode
-  control, and local GUI were live-tested successfully. The stock LLaVA profile did not
-  remain up on the validation machine because Docker exposed only 1.72-1.82 GiB free
-  physical memory after initialization, below the configured 2.00 GiB gate. See
-  `runtime_validation/README.md`.
-- The Qwen profile was not rerun: its 15 GiB total-memory requirement exceeds the
-  recorded 7.61 GiB Docker allocation, and its model cache was not prepared.
+The bundled LLaVA target uses
+`models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz`.
+It is a 896-dimensional `text_tokens` detector with a validation-selected block
+threshold of `0.6909739881800183` and review threshold of
+`0.23579741243702598`.
 
-## Verify the committed evidence
+Research outputs are intentionally not committed unless their feature bundle records
+the model family, model identifier, exact model and tokenizer revisions, layer,
+pooling, preprocessing fingerprint, aligned sample identifiers, and feature
+dimensions. The retained scripts reject missing or incompatible provenance.
+
+## Verify the deliverables
 
 From the repository root, using Python 3.10 or newer:
 
@@ -47,68 +34,52 @@ From the repository root, using Python 3.10 or newer:
 python deliverables/ci/run_checks.py
 ```
 
-This runs the research-pipeline unit tests and a read-only integrity check over the
-canonical committed evidence. Use `python deliverables/verify_deliverables.py --update`
-only when intentionally refreshing `MANIFEST.json` and `verification_report.json`
-after a reviewed deliverable change.
+This runs the research-pipeline unit tests and a read-only integrity check. Use
+`python deliverables/verify_deliverables.py --update` only after a reviewed
+deliverable change.
 
-## Reproduce into a new versioned run
+## Generate current research outputs
 
-Never overwrite the committed historical scores or result tables. The following
-example writes a complete deterministic reproduction under a new run directory:
+Create a new run directory and extract features using the same LLaVA family,
+checkpoint revisions, layer, pooling, and preprocessing contract as the tuned-v3
+detector:
 
 ```powershell
-$run = "deliverables/reproductions/smoke_v1"
+$run = "deliverables/runs/current_llava"
 
-python deliverables/pipeline/scripts/build_smoke_features.py `
+python deliverables/pipeline/scripts/extract_mllm_features.py `
+  --model-family llava_onevision `
   --metadata deliverables/benchmark/data/benchmark.csv `
-  --output "$run/benchmark_smoke_features.npz"
+  --corpus-root deliverables/benchmark `
+  --output-dir "$run/features" `
+  --model-id "models\huggingface\llava-onevision-qwen2-0.5b-ov-hf" `
+  --runtime-model-id "models/huggingface/llava-onevision-qwen2-0.5b-ov-hf" `
+  --model-revision c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c `
+  --tokenizer-revision c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c `
+  --local-files-only
+
 python deliverables/pipeline/scripts/run_experiment.py `
-  --metadata deliverables/benchmark/data/benchmark.csv `
-  --features "$run/benchmark_smoke_features.npz" `
+  --metadata "$run/features/aligned_source_metadata.csv" `
+  --features "$run/features/feature_bundle.npz" `
   --output-dir "$run/pipeline"
 
-python deliverables/red_teaming/generate_variants.py `
-  --output "$run/red_team/variants.csv"
-python deliverables/pipeline/scripts/build_smoke_features.py `
-  --metadata "$run/red_team/variants.csv" `
-  --output "$run/red_team/variant_smoke_features.npz"
-python deliverables/pipeline/scripts/score_feature_bundle.py `
-  --metadata "$run/red_team/variants.csv" `
-  --features "$run/red_team/variant_smoke_features.npz" `
-  --detector "$run/pipeline/selected_detector.npz" `
-  --output "$run/red_team/scored_variants.csv"
-python deliverables/red_teaming/evaluate_adaptive.py `
-  --scores "$run/red_team/scored_variants.csv" `
-  --detector "$run/pipeline/selected_detector.npz" `
-  --features "$run/red_team/variant_smoke_features.npz" `
-  --threshold-kind fixture_detector_block_threshold `
-  --traffic-mode not_applicable `
-  --query-budgets 1 3 6 `
-  --output "$run/red_team/best_of_n.json"
-
 python deliverables/ablation_report/run_ablation.py `
-  --metadata deliverables/benchmark/data/benchmark.csv `
-  --features "$run/benchmark_smoke_features.npz" `
-  --output-dir "$run/ablation" `
-  --adaptive-summary "$run/red_team/best_of_n.json" `
-  --adaptive-scores "$run/red_team/scored_variants.csv" `
-  --adaptive-detector "$run/pipeline/selected_detector.npz" `
-  --adaptive-features "$run/red_team/variant_smoke_features.npz"
+  --metadata "$run/features/aligned_source_metadata.csv" `
+  --features "$run/features/feature_bundle.npz" `
+  --output-dir "$run/ablation"
 ```
 
-`benchmark/build_workbook.mjs` additionally produces the Excel workbook and QA
-previews. It requires the bundled Codex spreadsheet runtime; the canonical
-machine-readable benchmark remains `benchmark/data/benchmark.csv`.
+For a current red-team run, generate a new panel, extract aligned features from that
+panel, and score them with the tuned-v3 detector. The feature-bundle provenance must
+match the detector before scoring is allowed. See `pipeline/README.md` and
+`red_teaming/README.md` for the exact commands.
 
-Model downloads and GPU extraction are deliberately excluded from this deterministic
-smoke workflow. To produce new MLLM evidence, use
-`pipeline/scripts/extract_mllm_features.py`, retain its provenance manifest, and rerun
-the same experiment and ablation entry points.
+`benchmark/build_workbook.mjs` produces the Excel workbook and QA previews. The
+canonical machine-readable benchmark is `benchmark/data/benchmark.csv`.
 
 ## Safety and disclosure
 
-All newly authored adversarial examples use explicit redaction placeholders instead
-of operational harmful content. Third-party dataset content and model weights are not
+All authored adversarial examples use explicit redaction placeholders instead of
+operational harmful content. Third-party dataset content and model weights are not
 redistributed. See `benchmark/DATASHEET.md` and `red_teaming/SAFE_USE.md` before
 extending the corpus.

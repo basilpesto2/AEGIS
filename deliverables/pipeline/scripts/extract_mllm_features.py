@@ -62,14 +62,17 @@ def main() -> None:
         )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows = _read_rows(args.metadata)
+    id_column = _id_column(rows[0])
     if args.model_family == "llava_onevision":
         rows = [row for row in rows if row.get("image_path", "").strip()]
         if not rows:
             raise ValueError("LLaVA extraction requires at least one image-text row")
+    aligned_source = args.output_dir / "aligned_source_metadata.csv"
     adapted = args.output_dir / "aligned_metadata.csv"
     masked = args.output_dir / "aligned_metadata_masked.csv"
-    _write_adapter_metadata(adapted, rows, mask=False)
-    _write_adapter_metadata(masked, rows, mask=True)
+    _write_source_metadata(aligned_source, rows)
+    _write_adapter_metadata(adapted, rows, id_column=id_column, mask=False)
+    _write_adapter_metadata(masked, rows, id_column=id_column, mask=True)
 
     if args.model_family == "qwen25_vl":
         if args.runtime_model_id:
@@ -94,7 +97,12 @@ def main() -> None:
         image_path = None
         if image_rows:
             image_metadata = args.output_dir / "aligned_metadata_images.csv"
-            _write_adapter_metadata(image_metadata, image_rows, mask=False)
+            _write_adapter_metadata(
+                image_metadata,
+                image_rows,
+                id_column=id_column,
+                mask=False,
+            )
             image_path = extract_qwen25_vl_pooling_embeddings(
                 image_metadata, args.corpus_root, args.output_dir / "raw", ["image_tokens"], config, "images"
             )["image_tokens"]
@@ -123,6 +131,19 @@ def main() -> None:
     masked_embeddings, masked_ids = _read_adapter_npz(masked_path)
     if sample_ids != masked_ids:
         raise ValueError("masked extraction IDs do not align with original extraction")
+    embedding_provenance = _read_embedding_provenance(text_path)
+    _require_matching_embedding_provenance(
+        embedding_provenance,
+        _read_embedding_provenance(masked_path),
+        "masked extraction",
+    )
+    if image_path is not None:
+        _require_matching_embedding_provenance(
+            embedding_provenance,
+            _read_embedding_provenance(image_path),
+            "image extraction",
+            allow_pooling_difference=True,
+        )
     if image_embeddings is None:
         aligned_images = np.zeros_like(text_embeddings)
     else:
@@ -137,8 +158,20 @@ def main() -> None:
         image_embeddings=aligned_images.astype(np.float32),
         attribution_features=attribution.astype(np.float32),
         feature_source=np.asarray([f"{args.model_family}_hidden_states_with_masked_perturbation"]),
+        model_family=np.asarray([embedding_provenance["model_family"]]),
+        model_id=np.asarray([embedding_provenance["model_id"]]),
+        model_revision=np.asarray([embedding_provenance["model_revision"]]),
+        tokenizer_revision=np.asarray(
+            [embedding_provenance["tokenizer_revision"]]
+        ),
+        preprocessing_sha256=np.asarray(
+            [embedding_provenance["preprocessing_sha256"]]
+        ),
+        layer=np.asarray([embedding_provenance["layer"]], dtype=np.int64),
+        pooling=np.asarray([embedding_provenance["pooling"]]),
+        id_column=np.asarray([id_column]),
     )
-    preprocessing = {
+    bundle_preparation = {
         "adapter": args.model_family,
         "layer": args.layer,
         "pooling": ["text_tokens", "image_tokens"],
@@ -149,19 +182,28 @@ def main() -> None:
     manifest = {
         "schema_version": 2,
         "model_family": args.model_family,
+        "model_id": embedding_provenance["model_id"],
+        "model_revision": embedding_provenance["model_revision"],
+        "tokenizer_revision": embedding_provenance["tokenizer_revision"],
+        "preprocessing_sha256": embedding_provenance["preprocessing_sha256"],
+        "layer": embedding_provenance["layer"],
+        "pooling": embedding_provenance["pooling"],
+        "id_column": id_column,
         "config": asdict(config),
         "rows": len(sample_ids),
+        "aligned_source_metadata": _portable_path(aligned_source),
+        "aligned_source_metadata_sha256": _sha256(aligned_source),
         "text_embedding_source": _portable_path(text_path),
         "image_embedding_source": _portable_path(image_path) if image_path else None,
         "masked_embedding_source": _portable_path(masked_path),
         "attribution_method": "aggregate hidden-state delta after fixed instruction-word masking",
         "mask_words": list(MASK_WORDS),
-        "pooling": ["text_tokens", "image_tokens"],
+        "available_pooling_views": ["text_tokens", "image_tokens"],
         "embedding_dimension": int(text_embeddings.shape[1]),
-        "preprocessing": preprocessing,
-        "preprocessing_sha256": hashlib.sha256(
+        "bundle_preparation": bundle_preparation,
+        "bundle_preparation_sha256": hashlib.sha256(
             json.dumps(
-                preprocessing,
+                bundle_preparation,
                 sort_keys=True,
                 separators=(",", ":"),
             ).encode("utf-8")
@@ -183,13 +225,49 @@ def main() -> None:
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    required = {"sample_id", "prompt_text", "image_path"}
+    required = {"prompt_text", "image_path"}
     if not rows or required - set(rows[0]):
         raise ValueError(f"metadata must contain {sorted(required)}")
+    id_column = _id_column(rows[0])
+    identifiers = [row[id_column].strip() for row in rows]
+    if any(not value for value in identifiers):
+        raise ValueError(f"{id_column} values must be non-empty")
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError(f"{id_column} values must be unique")
     return rows
 
 
-def _write_adapter_metadata(path: Path, rows: list[dict[str, str]], *, mask: bool) -> None:
+def _id_column(row: dict[str, str]) -> str:
+    if "sample_id" in row:
+        return "sample_id"
+    if "variant_id" in row:
+        return "variant_id"
+    raise ValueError("metadata must contain sample_id or variant_id")
+
+
+def _write_source_metadata(
+    path: Path,
+    rows: list[dict[str, str]],
+) -> None:
+    if not rows:
+        raise ValueError("cannot write empty aligned metadata")
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(rows[0]),
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_adapter_metadata(
+    path: Path,
+    rows: list[dict[str, str]],
+    *,
+    id_column: str,
+    mask: bool,
+) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
@@ -202,7 +280,13 @@ def _write_adapter_metadata(path: Path, rows: list[dict[str, str]], *, mask: boo
             if mask:
                 for word in MASK_WORDS:
                     text = text.replace(word, "[MASK]").replace(word.title(), "[MASK]")
-            writer.writerow({"sample_id": row["sample_id"], "text": text, "image_path": row["image_path"]})
+            writer.writerow(
+                {
+                    "sample_id": row[id_column],
+                    "text": text,
+                    "image_path": row["image_path"],
+                }
+            )
 
 
 def _read_adapter_npz(path: Path) -> tuple[np.ndarray, list[str]]:
@@ -211,6 +295,63 @@ def _read_adapter_npz(path: Path) -> tuple[np.ndarray, list[str]]:
         key = "sample_id" if "sample_id" in data else "sample_ids"
         sample_ids = [str(value) for value in np.asarray(data[key]).reshape(-1)]
     return embeddings, sample_ids
+
+
+def _read_embedding_provenance(path: Path) -> dict[str, object]:
+    with np.load(path, allow_pickle=False) as data:
+        required = {
+            "model_family",
+            "model_id",
+            "model_revision",
+            "tokenizer_revision",
+            "preprocessing_sha256",
+            "layer",
+            "pooling",
+        }
+        missing = required - set(data.files)
+        if missing:
+            raise ValueError(
+                f"embedding output lacks provenance ({path}): "
+                + ", ".join(sorted(missing))
+            )
+        result: dict[str, object] = {
+            key: (
+                int(np.asarray(data[key]).reshape(-1)[0])
+                if key == "layer"
+                else str(np.asarray(data[key]).reshape(-1)[0]).strip()
+            )
+            for key in required
+        }
+    for key in required - {"layer"}:
+        if not result[key]:
+            raise ValueError(f"embedding provenance {key} must be non-empty")
+    fingerprint = str(result["preprocessing_sha256"])
+    if (
+        len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ):
+        raise ValueError("embedding preprocessing_sha256 must be lowercase SHA-256 hex")
+    return result
+
+
+def _require_matching_embedding_provenance(
+    expected: dict[str, object],
+    actual: dict[str, object],
+    label: str,
+    *,
+    allow_pooling_difference: bool = False,
+) -> None:
+    ignored = {"pooling"} if allow_pooling_difference else set()
+    mismatches = [
+        key
+        for key in expected
+        if key not in ignored and expected[key] != actual[key]
+    ]
+    if mismatches:
+        raise ValueError(
+            f"{label} provenance does not match text extraction: "
+            + ", ".join(sorted(mismatches))
+        )
 
 
 def _attribution_summary(original: np.ndarray, masked: np.ndarray, image: np.ndarray) -> np.ndarray:

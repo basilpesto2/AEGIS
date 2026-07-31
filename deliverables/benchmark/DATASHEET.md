@@ -55,6 +55,6 @@ redistribution. This avoids silently imposing a legal choice during technical re
 
 ## Maintenance
 
-Version any content change, preserve old manifests, document adjudications, and screen
+Version any content change, retain versioned manifests, document adjudications, and screen
 new material for privacy and operational harm before commit. Aggregate results may be
 shared; raw high-risk extensions require controlled access and safe disclosure review.

@@ -1,9 +1,0 @@
-{
-  "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
-  "features": "C:\\Users\\Eugene\\Documents\\FYP\\deliverables\\reproducible_pipeline\\fixtures\\smoke_features.npz",
-  "metadata": "C:\\Users\\Eugene\\Documents\\FYP\\deliverables\\annotated_benchmark\\data\\benchmark.csv",
-  "rows": 64,
-  "scientific_status": "software_smoke_test_only",
-  "selection": "feature view and threshold use validation data only",
-  "test_policy": "test rows are not used for hyperparameter or threshold selection"
-}

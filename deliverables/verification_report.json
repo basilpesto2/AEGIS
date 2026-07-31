@@ -1,5 +1,5 @@
 {
-  "artifact_set_sha256": "f3fef505716b73f63e9073f1fda306aaff3e6ad77fd715c6ec03e8d37252a481",
+  "artifact_set_sha256": "66302992a73a1d5f218f256bfff06bf0b6357353a9d8b9c4acc697ac8611c3f2",
   "checks": [
     {
       "detail": [
@@ -32,7 +32,7 @@
       "passed": true
     },
     {
-      "name": "scope_frozen_byte_identity_attributes",
+      "name": "scope_binary_attributes",
       "passed": true
     },
     {
@@ -121,192 +121,87 @@
     },
     {
       "detail": {
-        "attribution": [
-          64,
-          8
+        "missing": [],
+        "unexpected": []
+      },
+      "name": "pipeline_current_tooling_layout",
+      "passed": true
+    },
+    {
+      "name": "pipeline_dependencies_pinned",
+      "passed": true
+    },
+    {
+      "name": "pipeline_feature_bundle_schema",
+      "passed": true
+    },
+    {
+      "name": "pipeline_default_experiment_config",
+      "passed": true
+    },
+    {
+      "name": "pipeline_entrypoint_contracts",
+      "passed": true
+    },
+    {
+      "name": "pipeline_provenance_documented",
+      "passed": true
+    },
+    {
+      "detail": {
+        "missing": [],
+        "unexpected": []
+      },
+      "name": "redteam_current_tooling_layout",
+      "passed": true
+    },
+    {
+      "name": "redteam_attack_catalog",
+      "passed": true
+    },
+    {
+      "name": "redteam_response_schema",
+      "passed": true
+    },
+    {
+      "name": "redteam_entrypoint_contracts",
+      "passed": true
+    },
+    {
+      "name": "redteam_safety_documented",
+      "passed": true
+    },
+    {
+      "detail": {
+        "missing": [],
+        "unexpected": []
+      },
+      "name": "ablation_current_tooling_layout",
+      "passed": true
+    },
+    {
+      "name": "ablation_entrypoint_contract",
+      "passed": true
+    },
+    {
+      "detail": {
+        "keys": [
+          "docker",
+          "docker_recheck",
+          "functional_validation",
+          "gui",
+          "llava_artifact",
+          "package_version",
+          "schema_version",
+          "scope",
+          "status",
+          "teardown",
+          "validation_date"
         ],
-        "image": [
-          64,
-          32
-        ],
-        "source": "deterministic_smoke_fixture_not_mllm_evidence",
-        "text": [
-          64,
-          32
-        ]
-      },
-      "name": "pipeline_feature_bundle_contract",
-      "passed": true
-    },
-    {
-      "detail": {
-        "feature_dim": 8,
-        "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
-        "feature_view": "attribution",
-        "selection_rule": "maximum validation AUPRC then AUROC",
-        "threshold": 0.8202568457258909
-      },
-      "name": "pipeline_fixture_detector_contract",
-      "passed": true
-    },
-    {
-      "name": "pipeline_test_prediction_alignment",
-      "passed": true
-    },
-    {
-      "name": "pipeline_historical_scope_disclaimer",
-      "passed": true
-    },
-    {
-      "name": "pipeline_reproduction_dependencies_pinned",
-      "passed": true
-    },
-    {
-      "name": "pipeline_feature_schema_provenance",
-      "passed": true
-    },
-    {
-      "detail": [
-        "pipeline/artifacts/smoke/selected_detector.npz",
-        "pipeline/fixtures/smoke_features.npz"
-      ],
-      "name": "pipeline_frozen_byte_identities",
-      "passed": true
-    },
-    {
-      "detail": {
-        "base_samples": 8,
-        "rows": 48
-      },
-      "name": "redteam_fixed_panel_shape",
-      "passed": true
-    },
-    {
-      "detail": {
-        "relocated_paths": 40
-      },
-      "name": "redteam_hashes_and_historical_relocation",
-      "passed": true
-    },
-    {
-      "name": "redteam_scored_panel_alignment",
-      "passed": true
-    },
-    {
-      "detail": [
-        {
-          "evasion_rate": 0.25,
-          "malicious_recall": 0.75,
-          "mean_worst_case_score": 0.8509169015585352,
-          "n_samples": 8,
-          "query_budget": 1,
-          "threshold": 0.8202568457258909
-        },
-        {
-          "evasion_rate": 0.625,
-          "malicious_recall": 0.375,
-          "mean_worst_case_score": 0.6473493839662411,
-          "n_samples": 8,
-          "query_budget": 3,
-          "threshold": 0.8202568457258909
-        },
-        {
-          "evasion_rate": 1.0,
-          "malicious_recall": 0.0,
-          "mean_worst_case_score": 0.573158479515896,
-          "n_samples": 8,
-          "query_budget": 6,
-          "threshold": 0.8202568457258909
-        }
-      ],
-      "name": "redteam_best_of_n_recomputed",
-      "passed": true
-    },
-    {
-      "name": "redteam_response_schema_runtime_conditions",
-      "passed": true
-    },
-    {
-      "name": "redteam_evidence_boundary_documented",
-      "passed": true
-    },
-    {
-      "detail": [
-        "red_teaming/generated/scored_variants.csv",
-        "red_teaming/generated/variant_smoke_features.npz",
-        "red_teaming/generated/variants.csv"
-      ],
-      "name": "redteam_frozen_byte_identities",
-      "passed": true
-    },
-    {
-      "detail": {
-        "adaptive_redteam_summary.csv": 3,
-        "attack_family_transfer.csv": 16,
-        "feature_signal_ablation.csv": 7,
-        "low_label_seed_runs.csv": 20,
-        "low_label_summary.csv": 4,
-        "uncertainty_coverage.csv": 4
-      },
-      "name": "ablation_result_table_shapes",
-      "passed": true
-    },
-    {
-      "detail": [],
-      "name": "ablation_numeric_results_finite",
-      "passed": true
-    },
-    {
-      "name": "ablation_adaptive_table_alignment",
-      "passed": true
-    },
-    {
-      "name": "ablation_report_evidence_boundaries",
-      "passed": true
-    },
-    {
-      "name": "ablation_historical_provenance_mapped",
-      "passed": true
-    },
-    {
-      "detail": {
         "package_version": "0.3.0",
-        "validated_tracked_operational_scope_paths": 12,
-        "validated_tracked_operational_source_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
-        "validation_execution_commit_before_squash": "b0a4aca0eadfdf61e2eecd615de0417689729e00",
-        "validation_execution_parent_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
-        "validation_execution_tree_before_squash": "23673aaa080320a5ba919b7229d5206291d28378"
+        "schema_version": 3
       },
       "name": "runtime_record_identity",
-      "passed": true
-    },
-    {
-      "name": "runtime_operational_source_commit_exists",
-      "passed": true
-    },
-    {
-      "detail": {
-        "anchor": "71a183bd10a102324a7c782155075e977d0e83ae",
-        "paths": [
-          ".dockerignore",
-          ".env.example",
-          ".gitignore",
-          "AEGIS",
-          "configs",
-          "models",
-          "compose.yaml",
-          "Dockerfile",
-          "pyproject.toml",
-          "requirements-runtime.constraints.txt",
-          "start-aegis.ps1",
-          "stop-aegis.ps1"
-        ]
-      },
-      "name": "runtime_tracked_operational_scope_alignment",
-      "passed": true
-    },
-    {
-      "name": "runtime_source_scope_qualifications",
       "passed": true
     },
     {
@@ -332,30 +227,26 @@
       "passed": true
     },
     {
-      "name": "runtime_post_restoration_docker_recheck",
+      "name": "runtime_docker_recheck",
       "passed": true
     },
     {
-      "name": "runtime_resource_constraint_qualified",
+      "name": "runtime_evidence_scope_documented",
       "passed": true
     },
     {
-      "name": "runtime_evidence_limits_documented",
-      "passed": true
-    },
-    {
-      "detail": 18,
+      "detail": 17,
       "name": "source_python_syntax",
       "passed": true
     },
     {
-      "detail": 15,
+      "detail": 8,
       "name": "source_json_parse",
       "passed": true
     },
     {
       "detail": [],
-      "name": "source_no_stale_executable_paths",
+      "name": "source_local_markdown_links",
       "passed": true
     },
     {
@@ -363,28 +254,25 @@
       "passed": true
     },
     {
-      "name": "source_reproduction_validation_record",
-      "passed": true
-    },
-    {
-      "detail": "f3fef505716b73f63e9073f1fda306aaff3e6ad77fd715c6ec03e8d37252a481",
+      "detail": "66302992a73a1d5f218f256bfff06bf0b6357353a9d8b9c4acc697ac8611c3f2",
       "name": "manifest_update_round_trip",
       "passed": true
     }
   ],
-  "checks_passed": 55,
-  "checks_total": 55,
-  "generated_at_utc": "2026-07-31T08:59:10Z",
-  "manifest_files": 122,
-  "manifest_sha256": "c5f89be5890d5017ef63ffa87b066d048c6513e32137c1463805dece7802ea80",
-  "manifest_total_canonical_bytes": 2184726,
-  "schema_version": 2,
+  "checks_passed": 44,
+  "checks_total": 44,
+  "generated_at_utc": "2026-07-31T09:45:27Z",
+  "manifest_files": 90,
+  "manifest_sha256": "1564f0fbf90c922e6da25f00b07f4cc1b7f6eace7a3eaae01ca212dc30b7545b",
+  "manifest_total_canonical_bytes": 1912805,
+  "package_version": "0.3.0",
+  "runtime_validation_date": "2026-07-31",
+  "schema_version": 3,
+  "scope": "current_aegis_deliverables",
   "status": "pass",
   "toolchain": {
     "numpy": "2.3.5",
-    "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.12.13"
   },
-  "validated_tracked_operational_source_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
-  "verifier_version": "2.0.0"
+  "verifier_version": "3.0.0"
 }
