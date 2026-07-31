@@ -19,7 +19,12 @@ from AEGIS.audit import (
 )
 from AEGIS.detector_artifact import DetectorArtifact
 from AEGIS.guardrail import EmbeddingProvider, GuardrailPolicy, resolve_fingerprint_key
-from AEGIS.service import RequestLimits, evaluate_request_payload
+from AEGIS.service import (
+    REQUEST_MODALITIES,
+    RequestLimits,
+    evaluate_request_payload,
+    normalize_input_modalities,
+)
 
 
 @dataclass
@@ -86,7 +91,10 @@ class GuardrailHTTPService:
     traffic_mode: str = "enforce"
     audit_logger: PrivacySafeAuditLogger | None = None
     metrics: ServiceMetrics = field(default_factory=ServiceMetrics)
+    target_profile: str | None = None
+    input_modalities: tuple[str, ...] | None = None
     _capacity: BoundedSemaphore = field(init=False, repr=False)
+    _traffic_mode_lock: Lock = field(default_factory=Lock, init=False, repr=False)
     _readiness: dict[str, object] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -96,6 +104,9 @@ class GuardrailHTTPService:
             raise ValueError("max_concurrent_requests must be positive.")
         if self.api_token is not None and not self.api_token:
             raise ValueError("api_token cannot be empty when provided.")
+        if self.target_profile is not None and not self.target_profile.strip():
+            raise ValueError("target_profile cannot be empty when provided.")
+        self.input_modalities = normalize_input_modalities(self.input_modalities)
         resolve_fingerprint_key(self.policy)
         self.traffic_mode = validate_traffic_mode(self.traffic_mode)
         self._capacity = BoundedSemaphore(self.max_concurrent_requests)
@@ -111,7 +122,13 @@ class GuardrailHTTPService:
 
     def readiness_report(self) -> dict[str, object]:
         report = dict(self._readiness)
-        report["traffic_mode"] = self.traffic_mode
+        report["target_profile"] = self.target_profile
+        report["capabilities"] = {
+            "input_modalities": list(self.input_modalities or REQUEST_MODALITIES),
+            "traffic_modes": ["shadow", "review", "enforce"],
+            "runtime_traffic_mode_control": self.api_token is not None,
+        }
+        report["traffic_mode"] = self.current_traffic_mode()
         report["audit_logging"] = self.audit_logger is not None
         if self.audit_logger is not None:
             report.update(self.audit_logger.readiness_context())
@@ -136,18 +153,35 @@ class GuardrailHTTPService:
             return False
         return hmac.compare_digest(authorization[7:], self.api_token)
 
+    def current_traffic_mode(self) -> str:
+        with self._traffic_mode_lock:
+            return self.traffic_mode
+
+    def set_traffic_mode(self, traffic_mode: str) -> str:
+        return self.change_traffic_mode(traffic_mode)[1]
+
+    def change_traffic_mode(self, traffic_mode: str) -> tuple[str, str]:
+        mode = validate_traffic_mode(traffic_mode)
+        with self._traffic_mode_lock:
+            previous = self.traffic_mode
+            self.traffic_mode = mode
+            return previous, self.traffic_mode
+
     def evaluate(self, payload: dict[str, Any]) -> dict[str, object]:
         if not self._capacity.acquire(blocking=False):
             raise ServiceBusyError("Guardrail inference capacity is currently full.")
         try:
+            traffic_mode = self.current_traffic_mode()
             response = evaluate_request_payload(
                 self.artifact,
                 self.provider,
                 payload,
                 policy=self.policy,
                 limits=self.limits,
+                input_modalities=self.input_modalities,
+                target_profile=self.target_profile,
             )
-            return apply_traffic_mode(response, self.traffic_mode)
+            return apply_traffic_mode(response, traffic_mode)
         finally:
             self._capacity.release()
 
@@ -329,11 +363,17 @@ def _handler_class(service: Any):
 
             trace_id = self._trace_id()
             response["trace_id"] = trace_id
+            summary = response.get("summary", {})
+            response_traffic_mode = (
+                summary.get("traffic_mode")
+                if isinstance(summary, dict)
+                else service.current_traffic_mode()
+            )
             if service.audit_logger is not None:
                 try:
                     response["audit_event_ids"] = service.audit_logger.record_response(
                         response,
-                        traffic_mode=service.traffic_mode,
+                        traffic_mode=response_traffic_mode,
                         status=int(HTTPStatus.OK),
                         duration_seconds=time.perf_counter() - start,
                     )
@@ -345,7 +385,6 @@ def _handler_class(service: Any):
                         start,
                     )
                     return
-            summary = response.get("summary", {})
             action_counts = summary.get("action_counts", {})
             guardrail_errors = sum(
                 1
@@ -359,6 +398,80 @@ def _handler_class(service: Any):
                 actions=action_counts if isinstance(action_counts, dict) else None,
                 guardrail_errors=guardrail_errors,
                 trace_id=trace_id,
+            )
+
+        def do_PUT(self) -> None:
+            start = time.perf_counter()
+            if self.path != "/v1/admin/traffic-mode":
+                self._error(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "Use PUT /v1/admin/traffic-mode.",
+                    start,
+                )
+                return
+            if not self._admin_authorized(start):
+                return
+            content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
+            if content_type != "application/json":
+                self._error(
+                    HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "unsupported_media_type",
+                    "Content-Type must be application/json.",
+                    start,
+                )
+                return
+            try:
+                length = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                length = -1
+            if length <= 0:
+                self._error(
+                    HTTPStatus.LENGTH_REQUIRED,
+                    "content_length_required",
+                    "A positive Content-Length is required.",
+                    start,
+                )
+                return
+            if length > 4096:
+                self._error(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    "request_too_large",
+                    "Traffic-mode request body exceeds 4096 bytes.",
+                    start,
+                )
+                return
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("JSON request body must be an object.")
+                if set(payload) != {"traffic_mode"}:
+                    raise ValueError(
+                        "Traffic-mode request must contain only 'traffic_mode'."
+                    )
+                requested_mode = payload["traffic_mode"]
+                if not isinstance(requested_mode, str):
+                    raise ValueError("traffic_mode must be a string.")
+                previous_mode, traffic_mode = service.change_traffic_mode(
+                    requested_mode
+                )
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+                self._error(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    str(exc),
+                    start,
+                )
+                return
+            self._respond(
+                {
+                    "target_profile": service.target_profile,
+                    "previous_traffic_mode": previous_mode,
+                    "traffic_mode": traffic_mode,
+                    "changed": traffic_mode != previous_mode,
+                },
+                status=HTTPStatus.OK,
+                started=start,
             )
 
         def log_message(self, format: str, *args) -> None:
@@ -375,6 +488,17 @@ def _handler_class(service: Any):
                 extra_headers={"WWW-Authenticate": "Bearer"},
             )
             return False
+
+        def _admin_authorized(self, started: float) -> bool:
+            if getattr(service, "api_token", None) is None:
+                self._error(
+                    HTTPStatus.FORBIDDEN,
+                    "runtime_control_disabled",
+                    "Runtime controls require a configured API bearer token.",
+                    started,
+                )
+                return False
+            return self._authorized(started)
 
         def _error(
             self,

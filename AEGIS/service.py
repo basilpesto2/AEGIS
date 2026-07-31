@@ -20,6 +20,8 @@ from AEGIS.guardrail import (
     decision_summary,
 )
 
+REQUEST_MODALITIES = ("text", "image", "image_text")
+
 
 @dataclass(frozen=True)
 class RequestLimits:
@@ -93,6 +95,8 @@ def evaluate_request_payload(
     policy: GuardrailPolicy | None = None,
     limits: RequestLimits | None = None,
     include_error_details: bool = False,
+    input_modalities: tuple[str, ...] | None = None,
+    target_profile: str | None = None,
 ) -> dict[str, object]:
     """Evaluate JSON-style prompt request payloads through an embedding provider.
 
@@ -106,6 +110,7 @@ def evaluate_request_payload(
     """
 
     effective_limits = limits or RequestLimits(allow_local_image_paths=True)
+    effective_modalities = normalize_input_modalities(input_modalities)
     request_payloads = payload.get("requests")
     if request_payloads is None:
         raw_requests = [payload]
@@ -129,6 +134,19 @@ def evaluate_request_payload(
             )
             for index, item in enumerate(raw_requests)
         ]
+        if effective_modalities is not None:
+            for index, request in enumerate(requests):
+                if request.modality not in effective_modalities:
+                    profile_detail = (
+                        f" for target profile {target_profile!r}"
+                        if target_profile is not None
+                        else ""
+                    )
+                    raise ValueError(
+                        f"Request {index + 1} uses unsupported modality "
+                        f"{request.modality!r}{profile_detail}; supported input "
+                        f"modalities are {', '.join(effective_modalities)}."
+                    )
         runtime = GuardrailRuntime(
             artifact,
             policy=policy,
@@ -139,6 +157,27 @@ def evaluate_request_payload(
             "summary": decision_summary(decisions),
             "decisions": [decision.to_dict() for decision in decisions],
         }
+
+
+def normalize_input_modalities(
+    input_modalities: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+    if input_modalities is None:
+        return None
+    if isinstance(input_modalities, str):
+        raise ValueError("input_modalities must be a sequence of modality names.")
+    normalized = tuple(dict.fromkeys(str(value).strip() for value in input_modalities))
+    if not normalized or any(not value for value in normalized):
+        raise ValueError("input_modalities must contain at least one non-empty modality.")
+    unsupported = tuple(
+        modality for modality in normalized if modality not in REQUEST_MODALITIES
+    )
+    if unsupported:
+        raise ValueError(
+            f"Unsupported input modalities {unsupported!r}; expected values from "
+            f"{REQUEST_MODALITIES!r}."
+        )
+    return normalized
 
 
 def _optional_str_list(value) -> list[str | None] | None:

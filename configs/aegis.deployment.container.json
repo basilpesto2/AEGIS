@@ -3,7 +3,7 @@
   "traffic_mode": "shadow",
   "evidence_session_mode": "runtime",
   "audit": {
-    "path": "/var/lib/aegis/audit/aegis-shadow-{evidence_session_id}.jsonl",
+    "path": "/var/lib/aegis/audit/aegis-qwen25vl3b-{evidence_session_id}.jsonl",
     "max_bytes": 104857600,
     "backup_count": 5,
     "fsync": false

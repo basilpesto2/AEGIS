@@ -225,6 +225,16 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
     )
 
 
+def _target_input_modalities(
+    config: DeploymentConfig,
+) -> tuple[str, ...] | None:
+    if config.target_profile is None:
+        return None
+    from AEGIS.target_profiles import get_target_profile
+
+    return get_target_profile(config.target_profile).intended_modalities
+
+
 def build_service_from_config(
     config: DeploymentConfig,
 ) -> tuple[Any, dict[str, object]]:
@@ -254,6 +264,7 @@ def build_service_from_config(
         warmup_payload = json.loads(config.warmup_request_path.read_text(encoding="utf-8"))
         if not isinstance(warmup_payload, dict):
             raise ValueError("Warmup request JSON must contain an object.")
+    input_modalities = _target_input_modalities(config)
     if config.server.worker_mode == "process":
         from AEGIS.isolated_service import ProcessIsolatedGuardrailService
 
@@ -271,6 +282,8 @@ def build_service_from_config(
             warmup_payload=warmup_payload,
             traffic_mode=config.traffic_mode,
             audit_logger=_audit_logger(config),
+            target_profile=config.target_profile,
+            input_modalities=input_modalities,
         )
         return isolated_service, {"warmup": isolated_service.startup_warmup}
 
@@ -286,6 +299,8 @@ def build_service_from_config(
         max_concurrent_requests=config.server.max_concurrent_requests,
         traffic_mode=config.traffic_mode,
         audit_logger=_audit_logger(config),
+        target_profile=config.target_profile,
+        input_modalities=input_modalities,
     )
     warmup = None
     if warmup_payload is not None:
@@ -665,6 +680,8 @@ def deployment_doctor(
                 policy=config.policy,
                 limits=config.request_limits,
                 include_error_details=True,
+                input_modalities=_target_input_modalities(config),
+                target_profile=config.target_profile,
             )
             probe_ok = not any(
                 decision.get("verdict") == "guardrail_error"
@@ -698,7 +715,7 @@ def deployment_doctor(
     else:
         next_actions = [
             {
-                "name": "serve_shadow",
+                "name": "serve",
                 "argv": ["aegis", "serve", "--config", str(config.config_path)],
                 "purpose": "Start the guardrail in its configured traffic mode.",
             }

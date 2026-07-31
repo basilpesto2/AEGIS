@@ -25,7 +25,12 @@ from AEGIS.http_server import (
     ServiceMetrics,
 )
 from AEGIS.provider_contract import load_provider
-from AEGIS.service import RequestLimits, evaluate_request_payload
+from AEGIS.service import (
+    REQUEST_MODALITIES,
+    RequestLimits,
+    evaluate_request_payload,
+    normalize_input_modalities,
+)
 
 
 class InferenceTimeoutError(TimeoutError):
@@ -52,10 +57,13 @@ class ProcessIsolatedGuardrailService:
     traffic_mode: str = "enforce"
     audit_logger: PrivacySafeAuditLogger | None = None
     metrics: ServiceMetrics = field(default_factory=ServiceMetrics)
+    target_profile: str | None = None
+    input_modalities: tuple[str, ...] | None = None
     _artifact: DetectorArtifact = field(init=False, repr=False)
     _capacity: BoundedSemaphore = field(init=False, repr=False)
     _request_lock: Lock = field(default_factory=Lock, init=False, repr=False)
     _lifecycle_lock: Lock = field(default_factory=Lock, init=False, repr=False)
+    _traffic_mode_lock: Lock = field(default_factory=Lock, init=False, repr=False)
     _process: Any = field(default=None, init=False, repr=False)
     _request_queue: Any = field(default=None, init=False, repr=False)
     _response_queue: Any = field(default=None, init=False, repr=False)
@@ -81,6 +89,9 @@ class ProcessIsolatedGuardrailService:
             raise ValueError("worker_startup_timeout_seconds must be positive.")
         if self.api_token is not None and not self.api_token:
             raise ValueError("api_token cannot be empty when provided.")
+        if self.target_profile is not None and not self.target_profile.strip():
+            raise ValueError("target_profile cannot be empty when provided.")
+        self.input_modalities = normalize_input_modalities(self.input_modalities)
         resolve_fingerprint_key(self.policy)
         self.traffic_mode = validate_traffic_mode(self.traffic_mode)
         self._artifact = load_detector_artifact(self.artifact_path)
@@ -98,6 +109,12 @@ class ProcessIsolatedGuardrailService:
 
     def readiness_report(self) -> dict[str, object]:
         report = dict(self._readiness)
+        report["target_profile"] = self.target_profile
+        report["capabilities"] = {
+            "input_modalities": list(self.input_modalities or REQUEST_MODALITIES),
+            "traffic_modes": ["shadow", "review", "enforce"],
+            "runtime_traffic_mode_control": self.api_token is not None,
+        }
         report["worker"] = {
             "mode": "process",
             "ready": self.ready,
@@ -109,7 +126,7 @@ class ProcessIsolatedGuardrailService:
             "last_error": self._last_worker_error,
         }
         report["ok"] = self.ready
-        report["traffic_mode"] = self.traffic_mode
+        report["traffic_mode"] = self.current_traffic_mode()
         report["audit_logging"] = self.audit_logger is not None
         if self.audit_logger is not None:
             report.update(self.audit_logger.readiness_context())
@@ -131,10 +148,25 @@ class ProcessIsolatedGuardrailService:
             return False
         return hmac.compare_digest(authorization[7:], self.api_token)
 
+    def current_traffic_mode(self) -> str:
+        with self._traffic_mode_lock:
+            return self.traffic_mode
+
+    def set_traffic_mode(self, traffic_mode: str) -> str:
+        return self.change_traffic_mode(traffic_mode)[1]
+
+    def change_traffic_mode(self, traffic_mode: str) -> tuple[str, str]:
+        mode = validate_traffic_mode(traffic_mode)
+        with self._traffic_mode_lock:
+            previous = self.traffic_mode
+            self.traffic_mode = mode
+            return previous, self.traffic_mode
+
     def evaluate(self, payload: dict[str, Any]) -> dict[str, object]:
         if not self._capacity.acquire(blocking=False):
             raise ServiceBusyError("Guardrail inference capacity is currently full.")
         try:
+            traffic_mode = self.current_traffic_mode()
             if not self.ready:
                 return apply_traffic_mode(
                     self._fail_safe_response(
@@ -143,7 +175,7 @@ class ProcessIsolatedGuardrailService:
                             "Inference worker is unavailable or restarting."
                         ),
                     ),
-                    self.traffic_mode,
+                    traffic_mode,
                 )
             request_id = str(uuid.uuid4())
             with self._request_lock:
@@ -167,14 +199,14 @@ class ProcessIsolatedGuardrailService:
                     self._invalidate_worker(str(error))
                     return apply_traffic_mode(
                         self._fail_safe_response(payload, error),
-                        self.traffic_mode,
+                        traffic_mode,
                     )
             if not isinstance(message, dict) or message.get("id") != request_id:
                 error = InferenceWorkerError("Inference worker returned an invalid response.")
                 self._invalidate_worker(str(error))
                 return apply_traffic_mode(
                     self._fail_safe_response(payload, error),
-                    self.traffic_mode,
+                    traffic_mode,
                 )
             if message.get("kind") == "result":
                 result = message.get("payload")
@@ -185,9 +217,9 @@ class ProcessIsolatedGuardrailService:
                     self._invalidate_worker(str(error))
                     return apply_traffic_mode(
                         self._fail_safe_response(payload, error),
-                        self.traffic_mode,
+                        traffic_mode,
                     )
-                return apply_traffic_mode(result, self.traffic_mode)
+                return apply_traffic_mode(result, traffic_mode)
             error_type = str(message.get("error_type", "InferenceWorkerError"))
             error_message = str(message.get("message", "Inference worker failed."))
             if error_type == "ValueError":
@@ -196,7 +228,7 @@ class ProcessIsolatedGuardrailService:
             self._invalidate_worker(str(error))
             return apply_traffic_mode(
                 self._fail_safe_response(payload, error),
-                self.traffic_mode,
+                traffic_mode,
             )
         finally:
             self._capacity.release()
@@ -226,6 +258,8 @@ class ProcessIsolatedGuardrailService:
                     self.policy,
                     self.limits,
                     self.warmup_payload,
+                    self.target_profile,
+                    self.input_modalities,
                 ),
                 name="aegis-inference-worker",
                 daemon=True,
@@ -330,6 +364,8 @@ class ProcessIsolatedGuardrailService:
             payload,
             policy=self.policy,
             limits=self.limits,
+            input_modalities=self.input_modalities,
+            target_profile=self.target_profile,
         )
 
 
@@ -357,6 +393,8 @@ def _inference_worker_main(
     policy: GuardrailPolicy,
     limits: RequestLimits,
     warmup_payload: dict[str, Any] | None,
+    target_profile: str | None,
+    input_modalities: tuple[str, ...] | None,
 ) -> None:
     try:
         artifact = load_detector_artifact(artifact_path)
@@ -367,6 +405,8 @@ def _inference_worker_main(
             policy=policy,
             limits=limits,
             max_concurrent_requests=1,
+            target_profile=target_profile,
+            input_modalities=input_modalities,
         )
         warmup = None
         if warmup_payload is not None:

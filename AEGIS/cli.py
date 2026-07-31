@@ -96,11 +96,6 @@ def _command_serve(args: argparse.Namespace) -> None:
     from AEGIS.http_server import create_guardrail_http_server
 
     config = load_deployment_config(args.config)
-    if config.target_profile is not None and config.traffic_mode != "shadow":
-        raise ValueError(
-            "Built-in AEGIS targets are research candidates and may only start in "
-            "shadow mode."
-        )
     service, startup = build_service_from_config(config)
     if not service.ready:
         raise RuntimeError(
