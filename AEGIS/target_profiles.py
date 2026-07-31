@@ -145,7 +145,7 @@ _TARGET_PROFILES = {
         intended_modalities=("image_text",),
         detector=(
             "models/aegis/"
-            "aegis_llava_onevision_05b_text_detector_provenance_v2.npz"
+            "aegis_llava_onevision_05b_text_detector_tuned_v3.npz"
         ),
         provider="AEGIS.providers:LlavaOnevisionGuardrailProvider",
         provider_options={
@@ -185,7 +185,7 @@ _TARGET_PROFILES = {
         cache_dir="models/huggingface",
         warmup_request_json="configs/llava_service_warmup_request.example.json",
         require_cuda=True,
-        review_threshold=0.05,
+        review_threshold=0.23579741243702598,
         inference_timeout_seconds=120.0,
         worker_startup_timeout_seconds=600.0,
         resources={
@@ -197,8 +197,9 @@ _TARGET_PROFILES = {
             "min_model_cache_bytes": 1610612736,
         },
         caveats=(
-            "The provenance-v2 detector still uses the legacy 360/180/180 research split.",
-            "The live evasion surrogate is routed to review, but broader adjudicated adversarial coverage is still required.",
+            "The tuned-v3 detector adds a 204-row generic-intent and benchmark-replay adaptation panel.",
+            "The external four-prompt operator regression is held out from model and threshold selection.",
+            "Broader adjudicated real-traffic and adversarial coverage is still required.",
             "This profile is not approved for production blocking.",
         ),
     ),

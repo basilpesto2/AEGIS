@@ -9,12 +9,12 @@
     "fsync": false
   },
   "cache_dir": "/app/models/huggingface",
-  "detector": "models/aegis/aegis_llava_onevision_05b_text_detector_provenance_v2.npz",
+  "detector": "models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz",
   "name": "aegis-llava05b-container",
   "policy": {
     "action_on_error": "review",
     "block_threshold": null,
-    "review_threshold": 0.05,
+    "review_threshold": 0.23579741243702598,
     "hash_images": true,
     "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
     "require_matching_provenance": true,

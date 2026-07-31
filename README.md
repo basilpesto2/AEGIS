@@ -51,6 +51,9 @@ for LLaVA so that Windows, Docker, and model loading have enough working memory.
 Both targets require an NVIDIA GPU. They are research candidates, not validated
 production blockers.
 
+The bundled LLaVA target uses the packaged tuned-v3 detector and its
+validation-selected thresholds.
+
 ### Understand shadow mode
 
 The bundled targets are locked to **shadow mode**. AEGIS reports what it recommends
