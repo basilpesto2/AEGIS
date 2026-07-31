@@ -27,3 +27,6 @@ aegis = "AEGIS.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["AEGIS*"]
+
+[tool.setuptools.package-data]
+"AEGIS.web" = ["*.html", "*.css", "*.js"]

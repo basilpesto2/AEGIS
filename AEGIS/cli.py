@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 import signal
 from typing import Any
 
@@ -52,6 +54,61 @@ def _build_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve", help="Start the AEGIS HTTP service.")
     serve.add_argument("--config", default=DEFAULT_CONFIG)
     serve.set_defaults(func=_command_serve)
+
+    gui = commands.add_parser(
+        "gui",
+        help="Start the optional local web dashboard for a running AEGIS service.",
+    )
+    gui.add_argument(
+        "--service-url",
+        default="http://127.0.0.1:8766",
+        help="HTTP(S) origin of the running AEGIS service.",
+    )
+    gui.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Loopback address for the local dashboard.",
+    )
+    gui.add_argument("--port", type=int, default=8767, help="Dashboard port.")
+    gui.add_argument(
+        "--history-db",
+        default=str(Path.home() / ".aegis" / "gui-history.sqlite3"),
+        help=(
+            "SQLite file for raw GUI prompt, image, result, and error history. "
+            "Created with restricted permissions where supported."
+        ),
+    )
+    gui.add_argument(
+        "--api-token-env",
+        default="AEGIS_API_TOKEN",
+        help="Environment variable containing the upstream AEGIS bearer token.",
+    )
+    gui.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=120.0,
+        help="Maximum time to wait for one upstream evaluation.",
+    )
+    gui.add_argument(
+        "--project-root",
+        default=".",
+        help=(
+            "AEGIS checkout containing compose.yaml for local target switching "
+            "(default: current directory)."
+        ),
+    )
+    gui.add_argument(
+        "--target-switch-timeout-seconds",
+        type=float,
+        default=900.0,
+        help="Maximum time to wait for a Compose target switch.",
+    )
+    gui.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open the dashboard in the default browser after startup.",
+    )
+    gui.set_defaults(func=_command_gui)
 
     return parser
 
@@ -143,6 +200,67 @@ def _command_serve(args: argparse.Namespace) -> None:
         close = getattr(service, "close", None)
         if callable(close):
             close()
+
+
+def _command_gui(args: argparse.Namespace) -> None:
+    from AEGIS.gui_server import GUIServerConfig, create_gui_http_server
+
+    api_token = os.getenv(args.api_token_env) or None
+    config = GUIServerConfig(
+        service_url=args.service_url,
+        history_path=Path(args.history_db).expanduser().resolve(),
+        api_token=api_token,
+        upstream_timeout_seconds=args.timeout_seconds,
+        project_root=Path(args.project_root).expanduser().resolve(),
+        target_switch_timeout_seconds=args.target_switch_timeout_seconds,
+    )
+    server = create_gui_http_server(args.host, args.port, config)
+    bound_host, bound_port = server.server_address[:2]
+    browser_host = (
+        "127.0.0.1"
+        if str(bound_host) in {"0.0.0.0", "::"}
+        else str(bound_host)
+    )
+    if ":" in browser_host and not browser_host.startswith("["):
+        browser_host = f"[{browser_host}]"
+    dashboard_url = f"http://{browser_host}:{bound_port}/"
+    _print_json(
+        {
+            "event": "aegis_gui_started",
+            "url": dashboard_url,
+            "service_url": config.service_url,
+            "authentication_configured": api_token is not None,
+            "history_path": str(config.history_path),
+            "history_contains_raw_inputs": True,
+            "project_root": str(config.project_root),
+        }
+    )
+    if args.open_browser:
+        import webbrowser
+
+        webbrowser.open_new_tab(dashboard_url)
+
+    handled_signals = [signal.SIGTERM]
+    if hasattr(signal, "SIGBREAK"):
+        handled_signals.append(signal.SIGBREAK)
+    previous_handlers = {
+        handled_signal: signal.getsignal(handled_signal)
+        for handled_signal in handled_signals
+    }
+
+    def stop_on_signal(signum: int, frame: Any) -> None:
+        raise KeyboardInterrupt
+
+    for handled_signal in handled_signals:
+        signal.signal(handled_signal, stop_on_signal)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for handled_signal, previous_handler in previous_handlers.items():
+            signal.signal(handled_signal, previous_handler)
+        server.server_close()
 
 
 def _print_json(payload: object) -> None:

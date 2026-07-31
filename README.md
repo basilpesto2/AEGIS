@@ -56,35 +56,22 @@ validation-selected thresholds.
 
 ### Understand shadow mode
 
-The bundled targets are locked to **shadow mode**. AEGIS reports what it recommends
-but deliberately does not stop the request:
+The bundled targets start in **shadow mode** by default. AEGIS reports what it
+recommends but deliberately does not stop the request:
 
 | Response field | Meaning in shadow mode |
 | --- | --- |
 | `recommended_action` | What the detector recommends: `allow`, `review`, or `block` |
 | `action` | What the service actually enforces; this remains `allow` |
 | `risk_score` | Detector score from `0.0` to `1.0` |
-| `traffic_mode` | The active operating mode; bundled targets report `shadow` |
+| `traffic_mode` | The active operating mode |
 
 For example, `"recommended_action": "block"` with `"action": "allow"` is expected
 in shadow mode. Record and evaluate the recommendation, but do not use the bundled
 detectors for automatic production blocking without validating them on your own data
 and policy.
 
-#### Can shadow mode be turned off?
-
-Not on either bundled target. The `llava05b` and `qwen25vl3b` profiles are research
-candidates, and `aegis serve` deliberately refuses to start a configuration that has
-a built-in `target_profile` and a `traffic_mode` other than `shadow`. Simply changing
-`"traffic_mode": "shadow"` to `"enforce"` in a bundled configuration produces this
-startup error:
-
-```text
-Built-in AEGIS targets are research candidates and may only start in shadow mode.
-```
-
-AEGIS supports three traffic-mode behaviors for a separately validated custom
-deployment:
+AEGIS supports three traffic-mode behaviors:
 
 | Mode | Effective `action` |
 | --- | --- |
@@ -92,37 +79,39 @@ deployment:
 | `review` | Preserve `allow` and `review`; convert a recommended `block` to `review` |
 | `enforce` | Apply the detector's `allow`, `review`, or `block` recommendation directly |
 
-Moving beyond shadow mode is a deployment-validation process, not only a configuration
-edit:
+The GUI's Settings page can turn **Shadow mode** off for either bundled target. Off
+means `enforce`: subsequent evaluations use the detector recommendation as the
+effective action. The service also supports the intermediate `review` mode through a
+deployment configuration or its authenticated runtime-control API.
+
+Turning shadow mode off changes behavior; it does not validate the detector. Both
+bundled targets remain research candidates and are not approved production blockers.
+Before using `review` or `enforce` for real traffic:
 
 1. Collect representative shadow-mode evidence and label the expected decisions.
 2. Measure false positives, false negatives, subgroup behavior, and adversarial cases.
 3. Train or calibrate a detector and thresholds for the intended model, data, and
    policy. Define review ownership, fail-closed behavior, monitoring, and rollback.
-4. Create a new deployment configuration for that validated artifact. A custom
-   deployment is represented by `"target_profile": null`; keeping a bundled profile
-   name retains the shadow-mode lock. Set `"traffic_mode": "review"` for a staged
-   rollout or `"traffic_mode": "enforce"` only after approval.
-5. Give the custom deployment a distinct name and audit path, run its deployment
+4. Set `"traffic_mode": "review"` for a staged rollout or `"traffic_mode": "enforce"`
+   only after approval. Use a separately calibrated detector and configuration when
+   the bundled research artifact is not valid for your traffic.
+5. Give the validated deployment a distinct name and audit path, run its deployment
    preflight, and test it before serving traffic:
 
    ```bash
    aegis doctor --config YOUR-CUSTOM-CONFIG.json
    ```
 
-For example, the relevant fields in a custom review-stage configuration are:
+For example, the relevant fields in a review-stage configuration are:
 
 ```json
 {
   "name": "aegis-custom-review",
-  "target_profile": null,
   "traffic_mode": "review"
 }
 ```
 
-This excerpt is not a complete configuration, and setting `target_profile` to `null`
-disables the bundled profile-compatibility checks. Do not copy a bundled detector into
-this configuration merely to bypass its safety lock.
+This excerpt is not a complete configuration.
 
 Finally, AEGIS returns a decision; it does not intercept the protected model by
 itself. The calling application must check the effective `action`, send only `allow`
@@ -283,6 +272,288 @@ docker compose --profile qwen up -d aegis-qwen
 curl http://127.0.0.1:8766/readyz
 ```
 
+## Web Dashboard
+
+The browser dashboard is an optional companion to the AEGIS HTTP service. It does not
+replace or change any existing CLI command or API workflow. If you followed the Docker
+deployment steps immediately above, the selected LLaVA or Qwen container is already
+the required AEGIS service at `http://127.0.0.1:8766`. The dashboard adds separate
+**Evaluate**, **History**, and **Settings** pages.
+
+### First-time installation and launch
+
+Complete these steps once per checkout after building and preparing a target in the
+deployment guide. The selected container may be running or stopped. The Windows
+launcher starts or reuses it, waits for the model to become ready, and then starts the
+dashboard. Do not run `aegis serve` alongside the Docker service because both use port
+`8766`. The host installation below provides the local `aegis gui` command only.
+
+1. Install Python 3.10 or newer on the host computer.
+2. From the project directory, create a virtual environment and install AEGIS.
+
+   Windows PowerShell:
+
+    ```powershell
+    py -3 -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    python -m pip install -e .
+    aegis --version
+    ```
+
+   If `py -3` reports that no suitable Python is installed, install Python 3.10 or
+   newer, reopen PowerShell, and repeat these commands. If PowerShell activation is
+   unavailable, install with
+   `.\.venv\Scripts\python.exe -m pip install -e .`. You can then use
+   `.\.venv\Scripts\aegis.exe` anywhere this guide uses `aegis`.
+
+   macOS or Linux:
+
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install --upgrade pip
+    python -m pip install -e .
+    aegis --version
+    ```
+
+3. Start the service and dashboard.
+
+   On Windows PowerShell, use the one-command
+   [`start-aegis.ps1`](start-aegis.ps1) launcher:
+
+    ```powershell
+    .\start-aegis.ps1
+    ```
+
+   This defaults to the prepared LLaVA target. To start a prepared Qwen target instead:
+
+    ```powershell
+    .\start-aegis.ps1 -Target qwen25vl3b
+    ```
+
+   The script checks Docker and the local installation, stops the alternate target,
+   runs the selected `docker compose up -d` command, waits up to 15 minutes for the
+   matching model to report ready, loads `AEGIS_API_TOKEN` from `.env` without printing
+   it, and runs:
+
+    ```text
+    .\.venv\Scripts\aegis.exe gui --project-root <PROJECT> --open-browser
+    ```
+
+   The model must already have been built and downloaded by the deployment steps. Use
+   `-ReadyTimeoutSeconds N` when the default 900-second startup timeout is insufficient.
+
+   On macOS or Linux, load the token and start the GUI manually:
+
+    ```bash
+    export AEGIS_API_TOKEN="$(sed -n 's/^AEGIS_API_TOKEN=//p' .env)"
+    aegis gui --open-browser
+    ```
+
+   The startup JSON printed in the terminal reports the exact dashboard URL, upstream
+   service, project root, and history database path.
+
+### Subsequent usage
+
+Do not recreate the virtual environment or reinstall AEGIS. On Windows, run the same
+launcher from the project directory:
+
+```powershell
+# LLaVA (default)
+.\start-aegis.ps1
+
+# OR Qwen
+.\start-aegis.ps1 -Target qwen25vl3b
+```
+
+Do not run both commands. The launcher leaves the GUI attached to the terminal; press
+`Ctrl+C` to stop the dashboard while leaving the selected Docker service running.
+
+On macOS or Linux, or to perform the startup manually:
+
+1. Check the existing service:
+
+   ```bash
+   curl http://127.0.0.1:8766/readyz
+   ```
+
+   When the response contains `"ok": true`, the container is already running; skip
+   every Docker start command. If it was stopped, restart only the target that you
+   were using:
+
+   ```bash
+   # LLaVA
+   docker compose --profile llava up -d aegis-llava
+
+   # OR Qwen
+   docker compose --profile qwen up -d aegis-qwen
+   ```
+
+   Do not run both alternatives, and do not run `aegis serve` alongside Docker.
+2. Activate the existing host environment.
+
+   Windows PowerShell:
+
+    ```powershell
+    .\.venv\Scripts\Activate.ps1
+    ```
+
+   macOS or Linux:
+
+    ```bash
+    source .venv/bin/activate
+    ```
+
+3. In that same terminal, make the Docker service's API token available to the GUI
+   process.
+
+   Windows PowerShell:
+
+    ```powershell
+    $env:AEGIS_API_TOKEN = (Get-Content .env |
+      Where-Object { $_ -like "AEGIS_API_TOKEN=*" }) -replace "^AEGIS_API_TOKEN=", ""
+    ```
+
+   macOS or Linux:
+
+    ```bash
+    export AEGIS_API_TOKEN="$(sed -n 's/^AEGIS_API_TOKEN=//p' .env)"
+    ```
+
+4. Start only the dashboard:
+
+    ```bash
+    aegis gui --open-browser
+    ```
+
+   If PowerShell activation is unavailable, use
+   `.\.venv\Scripts\aegis.exe gui --open-browser` instead.
+
+   The Docker service and its loaded model are reused; this command does not start a
+   second model service.
+
+### Use the dashboard
+
+1. Confirm that the service indicator reports **Online**. If it reports **Offline**,
+   verify that the AEGIS service is running at the configured URL and that
+   `AEGIS_API_TOKEN` matches the service token.
+2. Follow the input guidance shown above the form. The dashboard reads the active
+   target's capabilities from the running service and disables unsupported
+   combinations:
+
+   | Active target | Supported dashboard input |
+   | --- | --- |
+   | LLaVA (`llava05b`) | Prompt text together with one image |
+   | Qwen (`qwen25vl3b`) | Prompt text alone, or prompt text together with one image |
+
+   The bundled targets do not support image-only evaluation. To assess an image, add
+   prompt text such as `Assess this image.` GUI uploads accept one PNG, JPEG, or WebP
+   image up to 8 MiB.
+3. Select **Evaluate**. Analysis leads with the operational **Decision** (`Allow`,
+   `Review`, or `Block`) and explains the risk relative to the detector thresholds.
+   The binary classifier verdict and effective action remain visible as supporting
+   details, together with reasons, traffic mode, model, modality, trace ID, and latency.
+   A high score below the calibrated block threshold can therefore have classifier
+   verdict `benign` and decision `Review`; the dashboard emphasizes `Review`.
+4. Open **History** in the navigation to retrieve earlier GUI submissions. Search
+   prompt text or request IDs, filter by effective action, classifier verdict,
+   modality, status, or date, and open a row to view the complete prompt, image
+   preview, parsed decision, and full JSON response.
+5. To remove all GUI records, select **Clear** on the History page and confirm
+   the warning. This deletes every stored raw prompt, uploaded image, result, and error
+   from the GUI database and cannot be undone through AEGIS. A clear waits for an
+   evaluation already in progress and includes that record in the deletion boundary.
+   It does not delete the service's separate privacy-safe audit logs.
+6. Open **Settings** to inspect the active target and its accepted inputs, select a
+   prepared target, or change Shadow mode. Apply the change and confirm the warning:
+
+   - Selecting another target stops the current Compose service, starts the selected
+     service, waits for its readiness check, and then applies the chosen traffic mode.
+     Only one bundled target uses port `8766` at a time.
+   - A model swap can take several minutes. Evaluations may be unavailable while the
+     new model loads. If startup fails, AEGIS attempts to restore the previous target
+     and traffic mode and reports whether rollback succeeded.
+   - Turning **Shadow mode** off selects `enforce`, so a malicious verdict can produce
+     an effective `block`. The confirmation is intentional: bundled detectors remain
+     research candidates.
+   - A Settings-page mode change is runtime-only and is not written to deployment JSON.
+     Restarting a model outside the Settings workflow restores the configured mode,
+     which is `shadow` in both bundled container configurations. While the GUI remains
+     open, it remembers each target's selected mode and reapplies it during a later
+     hot-swap; restarting the GUI clears those in-memory preferences.
+
+Target switching controls the fixed services in this checkout's
+[`compose.yaml`](compose.yaml). Start `aegis gui` from the project directory, or pass
+`--project-root PATH`. A target must have been built and prepared before the GUI can
+start it. For example, prepare Qwen for later hot-swapping without starting it:
+
+```bash
+docker compose --profile qwen build aegis-qwen
+docker compose --profile tools run --rm prepare-qwen
+```
+
+Each valid GUI submission is written before it is sent to AEGIS and then updated with
+either its result or its upstream error, so service-side failures also remain available
+for reference. History persists across GUI restarts in
+`~/.aegis/gui-history.sqlite3` by default. Unlike AEGIS's privacy-safe audit log, this
+SQLite database contains raw prompt text and uploaded image bytes. Protect it according
+to your data-retention policy, do not place it in a shared directory, and stop the GUI
+before manually moving or deleting it.
+
+Press `Ctrl+C` in the dashboard terminal to stop only the GUI. The AEGIS service
+continues running until it is stopped separately. To stop both components, use the
+graceful shutdown workflow below.
+
+### Stop AEGIS
+
+On Windows, open another PowerShell window in the project directory and run:
+
+```powershell
+.\stop-aegis.ps1
+```
+
+The [`stop-aegis.ps1`](stop-aegis.ps1) launcher authenticates a loopback-only GUI
+shutdown request with `AEGIS_API_TOKEN`, waits for an active evaluation or history
+clear to finish, and closes the dashboard normally. It then runs Docker Compose's
+graceful stop operation for both bundled model services, so it works regardless of
+which target is active. Containers, downloaded models, audit data, and GUI history are
+retained for the next launch.
+
+The default GUI shutdown allowance is 180 seconds and the Docker stop grace period is
+30 seconds. They can be changed when necessary. If the GUI was started manually on a
+non-default port, pass that port as well:
+
+```powershell
+.\stop-aegis.ps1 -GuiPort 9000 -GuiTimeoutSeconds 300 -ContainerTimeoutSeconds 60
+```
+
+On macOS or Linux, stop the foreground GUI with `Ctrl+C`, then stop either possible
+Compose target:
+
+```bash
+docker compose --profile llava --profile qwen stop aegis-llava aegis-qwen
+```
+
+### GUI options
+
+`aegis gui` binds only to a loopback address. The upstream bearer token is read from
+`AEGIS_API_TOKEN` by the GUI process and remains server-side; it is never sent to the
+browser. Run `aegis gui --help` for the authoritative option list:
+
+```text
+--service-url URL       running AEGIS service (default http://127.0.0.1:8766)
+--host HOST             loopback bind address (default 127.0.0.1)
+--port PORT             dashboard port (default 8767)
+--history-db PATH       local SQLite history path
+--api-token-env NAME    environment variable holding the upstream token
+--timeout-seconds N     upstream evaluation timeout
+--project-root PATH     checkout containing compose.yaml for target switching
+--target-switch-timeout-seconds N
+                         maximum wait for a target to become ready
+--open-browser          open the dashboard after startup
+```
+
 ## Troubleshooting startup
 
 The Compose services use `restart: unless-stopped`. If startup fails, Docker retries
@@ -312,6 +583,25 @@ docker compose version
 
 On Windows, Docker Desktop must finish starting its Linux engine before Compose
 commands work.
+
+### `aegis` is not recognized
+
+The host-side GUI command is installed in the project's virtual environment. From the
+project directory, activate it before running `aegis`:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+aegis --version
+```
+
+If activation is unavailable, invoke the installed executable directly:
+
+```powershell
+.\.venv\Scripts\aegis.exe gui --open-browser
+```
+
+If that file does not exist, repeat the first-time GUI installation step with
+`.\.venv\Scripts\python.exe -m pip install -e .`.
 
 ### `/readyz` does not return `"ok": true`
 
@@ -450,10 +740,10 @@ The response contains one entry in `decisions`. The most useful fields are:
 - `risk_score`: the detector score from `0.0` to `1.0`.
 - `traffic_mode`: the active operating mode.
 
-The bundled targets run in shadow mode, so `action` remains `allow` while
-`recommended_action` shows what AEGIS would have done. Your application can record
-or review that recommendation, but should not treat these research detectors as
-validated production blockers.
+The bundled targets start in shadow mode, so `action` remains `allow` while
+`recommended_action` shows what AEGIS would have done until an operator changes the
+mode. Do not treat these research detectors as validated production blockers merely
+because runtime enforcement is available.
 
 ### Check an image and prompt
 

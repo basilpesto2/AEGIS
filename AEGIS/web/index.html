@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    >
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#070b12">
+    <meta
+      name="description"
+      content="AEGIS multimodal prompt guardrail dashboard, decision history, and target settings."
+    >
+    <title>Evaluate | AEGIS Guardrail Console</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <script defer src="/assets/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="AEGIS navigation">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <span>
+            <strong>AEGIS</strong>
+            <small>Console</small>
+          </span>
+        </div>
+
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a class="nav-link is-active" data-route="/" href="/" aria-current="page">
+            <span class="nav-index" aria-hidden="true">01</span>
+            <span>Evaluate</span>
+          </a>
+          <a class="nav-link" data-route="/history" href="/history">
+            <span class="nav-index" aria-hidden="true">02</span>
+            <span>History</span>
+          </a>
+          <a class="nav-link" data-route="/settings" href="/settings">
+            <span class="nav-index" aria-hidden="true">03</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-status">
+          <div class="service-state" id="sidebar-service-state">
+            <span class="status-dot is-pending" aria-hidden="true"></span>
+            <span id="sidebar-status-text">Checking</span>
+          </div>
+          <p class="sidebar-meta" id="sidebar-model">Unavailable</p>
+          <button class="text-button text-button-light" id="refresh-status" type="button">
+            Refresh
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-content" id="main-content">
+        <section
+          class="page-view"
+          id="evaluate-page"
+          data-page="/"
+          aria-labelledby="evaluate-page-title"
+        >
+          <header class="page-header">
+            <div>
+              <h1 id="evaluate-page-title" tabindex="-1">Evaluate</h1>
+            </div>
+            <div
+              class="header-status"
+              id="header-service-state"
+              role="status"
+              aria-live="polite"
+            >
+              <span class="status-dot is-pending" aria-hidden="true"></span>
+              <span id="header-status-text">Connecting</span>
+            </div>
+          </header>
+
+          <section class="workspace-grid" id="workspace" aria-labelledby="workspace-title">
+            <article class="surface composer-card">
+              <div class="section-heading">
+                <div>
+                  <h2 id="workspace-title">Prompt</h2>
+                </div>
+                <span class="privacy-note">Local service</span>
+              </div>
+
+              <p class="capability-note" id="modality-guidance" role="status">
+                Checking input support&hellip;
+              </p>
+
+              <form id="evaluate-form" novalidate>
+                <div class="field-group">
+                  <div class="field-label-row">
+                    <label for="prompt-text">Text</label>
+                    <span id="character-count">0 / 32,768</span>
+                  </div>
+                  <textarea
+                    id="prompt-text"
+                    name="text"
+                    rows="9"
+                    maxlength="32768"
+                    placeholder="Enter prompt&hellip;"
+                    aria-describedby="modality-guidance prompt-hint prompt-error"
+                  ></textarea>
+                  <p class="field-hint" id="prompt-hint">
+                    Depends on target support.
+                  </p>
+                  <p class="field-error" id="prompt-error" role="alert"></p>
+                </div>
+
+                <div class="field-group">
+                  <div class="field-label-row">
+                    <span id="image-label">Image</span>
+                    <span id="image-requirement">Checking&hellip;</span>
+                  </div>
+                  <label
+                    class="drop-zone"
+                    id="drop-zone"
+                    for="image-input"
+                    tabindex="0"
+                    role="button"
+                    aria-labelledby="image-label drop-title"
+                    aria-describedby="modality-guidance drop-help image-error"
+                  >
+                    <input
+                      class="visually-hidden"
+                      id="image-input"
+                      name="image"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                    >
+                    <span class="upload-glyph" aria-hidden="true">
+                      <span></span>
+                    </span>
+                    <span class="drop-copy">
+                      <strong id="drop-title">Drop image</strong>
+                      <small id="drop-help">
+                        PNG, JPEG, WebP &middot; 8 MB max
+                      </small>
+                    </span>
+                    <span class="browse-pill" aria-hidden="true">Browse</span>
+                  </label>
+
+                  <div class="file-preview" id="file-preview" hidden>
+                    <img id="file-thumbnail" alt="">
+                    <span class="file-copy">
+                      <strong id="file-name"></strong>
+                      <small id="file-meta"></small>
+                    </span>
+                    <button class="icon-button" id="remove-image" type="button">
+                      <span aria-hidden="true">&times;</span>
+                      <span class="visually-hidden">Remove selected image</span>
+                    </button>
+                  </div>
+                  <p class="field-error" id="image-error" role="alert"></p>
+                </div>
+
+                <div class="submit-row">
+                  <p>
+                    Risk assessment only. Prompts are not forwarded.
+                  </p>
+                  <button
+                    class="primary-button"
+                    id="evaluate-button"
+                    type="submit"
+                    aria-describedby="modality-guidance"
+                    disabled
+                  >
+                    <span class="button-label">Evaluate</span>
+                    <span class="button-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+
+            <article class="surface result-card" aria-labelledby="result-title">
+              <div class="section-heading compact-heading">
+                <div>
+                  <h2 id="result-title">Decision</h2>
+                </div>
+                <span class="result-state" id="result-state">Waiting</span>
+              </div>
+
+              <div class="result-container" id="result-container" aria-live="polite">
+                <div class="empty-state">
+                  <span class="empty-orbit" aria-hidden="true">
+                    <span></span>
+                  </span>
+                  <h3>Waiting</h3>
+                  <p>Submit a prompt.</p>
+                </div>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section
+          class="page-view history-page"
+          id="history-page"
+          data-page="/history"
+          aria-labelledby="history-page-title"
+          hidden
+        >
+          <header class="page-header">
+            <div>
+              <h1 id="history-page-title" tabindex="-1">History</h1>
+            </div>
+          </header>
+
+          <section class="kpi-grid" aria-label="Evaluation summary">
+            <article class="kpi-card kpi-total">
+              <p>Analyzed</p>
+              <strong id="kpi-total">&mdash;</strong>
+              <small>Total</small>
+            </article>
+            <article class="kpi-card kpi-allow">
+              <p>Allowed</p>
+              <strong id="kpi-allow">&mdash;</strong>
+              <small>Decision</small>
+            </article>
+            <article class="kpi-card kpi-review">
+              <p>Review</p>
+              <strong id="kpi-review">&mdash;</strong>
+              <small>Decision</small>
+            </article>
+            <article class="kpi-card kpi-block">
+              <p>Blocked</p>
+              <strong id="kpi-block">&mdash;</strong>
+              <small>Decision</small>
+            </article>
+          </section>
+
+          <section class="history-section" id="history" aria-labelledby="history-title">
+            <div class="history-heading">
+              <div>
+                <h2 id="history-title">Records</h2>
+              </div>
+              <div class="page-actions">
+                <button class="secondary-button" id="refresh-history" type="button">
+                  Refresh
+                </button>
+                <button class="danger-button" id="clear-history" type="button">
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <form class="filter-panel" id="history-filters" role="search">
+              <div class="search-field">
+                <label class="visually-hidden" for="history-search">Search history</label>
+                <span class="search-mark" aria-hidden="true"></span>
+                <input
+                  id="history-search"
+                  name="q"
+                  type="search"
+                  autocomplete="off"
+                  maxlength="256"
+                  placeholder="Search prompts or request IDs"
+                >
+              </div>
+
+              <label class="filter-field">
+                <span>Effective</span>
+                <select id="filter-action" name="action">
+                  <option value="">All</option>
+                  <option value="allow">Allow</option>
+                  <option value="review">Review</option>
+                  <option value="block">Block</option>
+                </select>
+              </label>
+
+              <label class="filter-field">
+                <span>Classifier</span>
+                <select id="filter-verdict" name="verdict">
+                  <option value="">All</option>
+                  <option value="benign">Benign</option>
+                  <option value="malicious">Malicious</option>
+                  <option value="guardrail_error">Guardrail error</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+
+              <label class="filter-field">
+                <span>Modality</span>
+                <select id="filter-modality" name="modality">
+                  <option value="">All modalities</option>
+                  <option value="text">Text</option>
+                  <option value="image">Image</option>
+                  <option value="image_text">Multimodal</option>
+                </select>
+              </label>
+
+              <label class="filter-field">
+                <span>Status</span>
+                <select id="filter-status" name="status">
+                  <option value="">All statuses</option>
+                  <option value="completed">Completed</option>
+                  <option value="error">Error</option>
+                </select>
+              </label>
+
+              <label class="filter-field date-field">
+                <span>From</span>
+                <input id="filter-from" name="from" type="date">
+              </label>
+
+              <label class="filter-field date-field">
+                <span>To</span>
+                <input id="filter-to" name="to" type="date">
+              </label>
+
+              <label class="filter-field limit-field">
+                <span>Rows</span>
+                <select id="filter-limit" name="limit">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                </select>
+              </label>
+
+              <div class="filter-actions">
+                <button class="filter-submit" type="submit">Apply</button>
+                <button class="text-button" id="clear-filters" type="button">Clear</button>
+              </div>
+            </form>
+
+            <div class="history-meta">
+              <p id="history-count" aria-live="polite">Not loaded.</p>
+              <p id="active-filter-note"></p>
+            </div>
+
+            <div
+              class="history-table-wrap"
+              role="region"
+              aria-labelledby="history-title"
+              tabindex="0"
+            >
+              <table class="history-table">
+                <caption class="visually-hidden">
+                  Searchable history of AEGIS prompt evaluations
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Evaluated</th>
+                    <th scope="col">Prompt</th>
+                    <th scope="col">Modality</th>
+                    <th scope="col">Classifier</th>
+                    <th scope="col">Risk</th>
+                    <th scope="col">Decision</th>
+                    <th scope="col">Effective</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span class="visually-hidden">Details</span></th>
+                  </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+              </table>
+
+              <div class="history-message" id="history-message" hidden></div>
+            </div>
+
+            <div class="pagination" aria-label="History pagination">
+              <button class="secondary-button" id="previous-page" type="button" disabled>
+                Previous
+              </button>
+              <span id="page-status">Page 1</span>
+              <button class="secondary-button" id="next-page" type="button" disabled>
+                Next
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <section
+          class="page-view settings-page"
+          id="settings-page"
+          data-page="/settings"
+          aria-labelledby="settings-page-title"
+          hidden
+        >
+          <header class="page-header">
+            <div>
+              <h1 id="settings-page-title" tabindex="-1">Settings</h1>
+            </div>
+          </header>
+
+          <div class="settings-grid">
+            <article class="surface settings-card settings-control-card">
+              <div class="section-heading">
+                <div>
+                  <h2>Target</h2>
+                </div>
+                <span class="settings-state" id="settings-state">Loading</span>
+              </div>
+
+              <form id="settings-form" aria-describedby="settings-control-note">
+                <fieldset class="target-fieldset">
+                  <legend>Target</legend>
+                  <div class="target-options" id="target-options" aria-live="polite">
+                    <div class="settings-placeholder">
+                      <span aria-hidden="true"></span>
+                      <p>Loading&hellip;</p>
+                    </div>
+                  </div>
+                </fieldset>
+
+                <section
+                  class="selected-target-details"
+                  id="selected-target-details"
+                  aria-labelledby="selected-target-title"
+                >
+                  <div class="selected-target-heading">
+                    <div>
+                      <span class="detail-label">Selected</span>
+                      <strong class="target-title" id="selected-target-title">Target</strong>
+                    </div>
+                    <span class="badge" id="selected-target-status" data-tone="neutral">
+                      Unknown
+                    </span>
+                  </div>
+                  <p id="selected-target-description">
+                    Waiting for service.
+                  </p>
+                  <dl class="target-facts">
+                    <div>
+                      <dt>Model</dt>
+                      <dd id="selected-target-model">Not reported</dd>
+                    </div>
+                    <div>
+                      <dt>Input</dt>
+                      <dd id="selected-target-inputs">Not reported</dd>
+                    </div>
+                  </dl>
+                  <div class="target-caveats" id="selected-target-caveats" hidden>
+                    <strong>Notes</strong>
+                    <ul id="selected-target-caveat-list"></ul>
+                  </div>
+                </section>
+
+                <div class="mode-control">
+                  <label class="switch-row" for="shadow-mode">
+                    <span class="switch-copy">
+                      <strong>Shadow mode</strong>
+                      <small id="shadow-mode-help">
+                        Record recommendations; keep effective action Allow.
+                      </small>
+                    </span>
+                    <span class="switch-control">
+                      <input
+                        id="shadow-mode"
+                        name="shadow_mode"
+                        type="checkbox"
+                        aria-describedby="shadow-mode-help enforce-warning"
+                        checked
+                      >
+                      <span class="switch-track" aria-hidden="true">
+                        <span></span>
+                      </span>
+                    </span>
+                  </label>
+
+                  <div class="enforce-warning" id="enforce-warning" role="note" hidden>
+                    <strong>Enforcement active.</strong>
+                    <p>
+                      Recommendations can block or flag prompts. Use only with a
+                      validated target.
+                    </p>
+                  </div>
+                </div>
+
+                <p class="settings-control-note" id="settings-control-note" role="status">
+                  Checking control&hellip;
+                </p>
+                <p class="settings-error" id="settings-error" role="alert"></p>
+
+                <div class="settings-action-row">
+                  <p>Target changes may pause evaluations.</p>
+                  <button class="primary-button settings-apply" id="apply-settings" type="submit">
+                    <span class="button-label">Apply</span>
+                    <span class="button-arrow" aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+
+            <aside class="surface settings-card deployment-card" aria-labelledby="deployment-title">
+              <div class="section-heading">
+                <div>
+                  <h2 id="deployment-title">Runtime</h2>
+                </div>
+              </div>
+              <dl class="deployment-facts">
+                <div>
+                  <dt>Target</dt>
+                  <dd id="current-target-profile">Not reported</dd>
+                </div>
+                <div>
+                  <dt>Model</dt>
+                  <dd id="current-model-id">Not reported</dd>
+                </div>
+                <div>
+                  <dt>Mode</dt>
+                  <dd id="current-traffic-mode">Not reported</dd>
+                </div>
+                <div>
+                  <dt>Readiness</dt>
+                  <dd id="current-readiness">Checking</dd>
+                </div>
+              </dl>
+              <p class="deployment-note">
+                Changes affect new evaluations only.
+              </p>
+            </aside>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <dialog class="detail-dialog" id="history-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-shell">
+        <header class="dialog-header">
+          <div>
+            <h2 id="dialog-title">Record</h2>
+          </div>
+          <button class="dialog-close" id="close-dialog" type="button">
+            <span aria-hidden="true">&times;</span>
+            <span class="visually-hidden">Close decision details</span>
+          </button>
+        </header>
+        <div class="dialog-content" id="dialog-content"></div>
+      </div>
+    </dialog>
+
+    <dialog
+      class="confirm-dialog"
+      id="clear-history-dialog"
+      aria-labelledby="clear-history-title"
+      aria-describedby="clear-history-description"
+    >
+      <div class="confirm-shell">
+        <span class="confirm-mark is-danger" aria-hidden="true">!</span>
+        <h2 id="clear-history-title">Clear?</h2>
+        <p id="clear-history-description">
+          Permanently delete GUI prompts, images, verdicts, actions, and errors.
+          Service audit logs remain.
+        </p>
+        <p class="dialog-error" id="clear-history-error" role="alert"></p>
+        <div class="confirm-actions">
+          <button class="secondary-button" id="cancel-clear-history" type="button">
+            Cancel
+          </button>
+          <button class="danger-button danger-button-solid" id="confirm-clear-history" type="button">
+            <span class="button-label">Clear</span>
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      class="confirm-dialog"
+      id="enforce-dialog"
+      aria-labelledby="enforce-dialog-title"
+      aria-describedby="enforce-dialog-description"
+    >
+      <div class="confirm-shell">
+        <span class="confirm-mark is-warning" aria-hidden="true">!</span>
+        <h2 id="enforce-dialog-title">Enforce?</h2>
+        <p id="enforce-dialog-description">
+          Recommendations will control new evaluations and may block or flag prompts.
+        </p>
+        <p class="dialog-error" id="enforce-dialog-error" role="alert"></p>
+        <div class="confirm-actions">
+          <button class="secondary-button" id="cancel-enforce" type="button">
+            Cancel
+          </button>
+          <button class="danger-button danger-button-solid" id="confirm-enforce" type="button">
+            Enforce
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>
