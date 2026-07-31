@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "validation_date": "2026-07-31",
+  "status": "pass",
+  "scope": "isolated benchmark rebuild, workbook QA, deterministic pipeline, red-team best-of-N evaluation, ablation generation, and paired-response evaluator",
+  "toolchain": {
+    "python": "3.12.13",
+    "numpy": "2.3.5",
+    "pillow": "12.2.0",
+    "artifact_tool": "2.8.36"
+  },
+  "benchmark_rebuild": {
+    "isolated_from_committed_evidence": true,
+    "rows": 64,
+    "csv_sha256": "ed2ab26b2a4383944badcf24d32ed55ea2d0cc372e22cfe66d273e740e7d7e7c",
+    "rows_json_sha256": "da5087298f4da5b1ef9503908de738bc8bbb4e1295f32c3ff74f4b53ba1ce7b3",
+    "image_count": 44,
+    "image_hash_mismatches": 0
+  },
+  "workbook_review": {
+    "sheets": [
+      "Summary",
+      "Benchmark",
+      "Data Dictionary"
+    ],
+    "summary_formula_count": 23,
+    "formula_error_matches": 0,
+    "qa_previews_stable_across_two_builds": true,
+    "all_sheets_visually_reviewed": true,
+    "evidence_boundary_present": true,
+    "temporary_inspection_sidecar_removed": true
+  },
+  "research_workflow": {
+    "isolated_versioned_output": true,
+    "historical_artifacts_overwritten": false,
+    "stages": [
+      "build benchmark smoke features",
+      "train and select fixture detector",
+      "generate redacted variants",
+      "build variant smoke features",
+      "score variant panel",
+      "evaluate bounded best-of-N evasion",
+      "generate ablation tables, manifest, and report"
+    ],
+    "benchmark_feature_bundle_sha256": "93cd720edfc6bfbd55a94eba05dbe3079a3d0e350d390ac8ebe5273b38fa32a2",
+    "variant_feature_bundle_sha256": "f6a3ba6d712289b395737041c4fa25afebbb1ed3d4bd053a509a239fb5fe2b5c",
+    "best_of_n": [
+      {
+        "query_budget": 1,
+        "malicious_recall": 0.75,
+        "evasion_rate": 0.25,
+        "mean_worst_case_score": 0.8509169015585352
+      },
+      {
+        "query_budget": 3,
+        "malicious_recall": 0.375,
+        "evasion_rate": 0.625,
+        "mean_worst_case_score": 0.6473493839662411
+      },
+      {
+        "query_budget": 6,
+        "malicious_recall": 0.0,
+        "evasion_rate": 1.0,
+        "mean_worst_case_score": 0.573158479515896
+      }
+    ],
+    "ablation_report_generated": true,
+    "ablation_manifest_generated": true
+  },
+  "paired_response_evaluator": {
+    "synthetic_paired_contract_test_passed": true,
+    "shadow_mode_effective_action_validated": true,
+    "observed_reduction_calculation_validated": true
+  },
+  "cleanup": {
+    "temporary_reproduction_outputs_removed": true,
+    "python_cache_directories_removed": true,
+    "temporary_node_dependency_junction_removed": true
+  }
+}

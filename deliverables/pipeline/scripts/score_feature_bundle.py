@@ -21,7 +21,12 @@ def main() -> None:
     parser.add_argument("--features", type=Path, required=True)
     parser.add_argument("--detector", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--force", action="store_true", help="Replace an existing score table.")
     args = parser.parse_args()
+    if args.output.exists() and not args.force:
+        raise FileExistsError(
+            f"refusing to overwrite existing evidence: {args.output}; choose a new --output or use --force"
+        )
     with args.metadata.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     if not rows:
@@ -55,7 +60,7 @@ def main() -> None:
         output_rows.append({**row, "risk_score": float(score), "detector_threshold": threshold, "feature_view": view_name})
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(output_rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(output_rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(output_rows)
     print(json.dumps({"rows": len(rows), "feature_view": view_name, "threshold": threshold, "output": str(args.output)}, indent=2))

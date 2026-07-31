@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import platform
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -34,12 +36,30 @@ def main() -> None:
     parser.add_argument("--corpus-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--model-id")
+    parser.add_argument(
+        "--runtime-model-id",
+        help=(
+            "Optional local LLaVA checkpoint path used for loading while --model-id "
+            "retains the detector's provenance identifier."
+        ),
+    )
     parser.add_argument("--model-revision")
     parser.add_argument("--tokenizer-revision")
     parser.add_argument("--cache-dir", default="models/huggingface")
     parser.add_argument("--layer", type=int, default=-1)
     parser.add_argument("--local-files-only", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Replace files in a non-empty output directory.")
     args = parser.parse_args()
+    if not args.model_revision or not args.tokenizer_revision:
+        parser.error(
+            "--model-revision and --tokenizer-revision are required for "
+            "provenance-complete MLLM extraction"
+        )
+    if args.output_dir.exists() and any(args.output_dir.iterdir()) and not args.force:
+        raise FileExistsError(
+            f"refusing to overwrite non-empty output directory: {args.output_dir}; "
+            "choose a versioned --output-dir or use --force"
+        )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows = _read_rows(args.metadata)
     if args.model_family == "llava_onevision":
@@ -52,6 +72,8 @@ def main() -> None:
     _write_adapter_metadata(masked, rows, mask=True)
 
     if args.model_family == "qwen25_vl":
+        if args.runtime_model_id:
+            parser.error("--runtime-model-id is supported only for llava_onevision")
         config = Qwen25VLExtractionConfig(
             model_id=args.model_id or "Qwen/Qwen2.5-VL-3B-Instruct",
             model_revision=args.model_revision,
@@ -80,6 +102,7 @@ def main() -> None:
     else:
         config = LlavaOnevisionExtractionConfig(
             model_id=args.model_id or "llava-hf/llava-onevision-qwen2-0.5b-ov-hf",
+            runtime_model_id=args.runtime_model_id,
             model_revision=args.model_revision,
             tokenizer_revision=args.tokenizer_revision,
             cache_dir=args.cache_dir,
@@ -115,16 +138,42 @@ def main() -> None:
         attribution_features=attribution.astype(np.float32),
         feature_source=np.asarray([f"{args.model_family}_hidden_states_with_masked_perturbation"]),
     )
+    preprocessing = {
+        "adapter": args.model_family,
+        "layer": args.layer,
+        "pooling": ["text_tokens", "image_tokens"],
+        "attribution": "fixed_instruction_word_masking",
+        "mask_words": list(MASK_WORDS),
+        "corpus_metadata_sha256": _sha256(args.metadata),
+    }
     manifest = {
+        "schema_version": 2,
         "model_family": args.model_family,
         "config": asdict(config),
         "rows": len(sample_ids),
-        "text_embedding_source": str(text_path),
-        "image_embedding_source": str(image_path) if image_path else None,
-        "masked_embedding_source": str(masked_path),
+        "text_embedding_source": _portable_path(text_path),
+        "image_embedding_source": _portable_path(image_path) if image_path else None,
+        "masked_embedding_source": _portable_path(masked_path),
         "attribution_method": "aggregate hidden-state delta after fixed instruction-word masking",
         "mask_words": list(MASK_WORDS),
-        "feature_bundle": str(output_path),
+        "pooling": ["text_tokens", "image_tokens"],
+        "embedding_dimension": int(text_embeddings.shape[1]),
+        "preprocessing": preprocessing,
+        "preprocessing_sha256": hashlib.sha256(
+            json.dumps(
+                preprocessing,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
+        "feature_bundle": _portable_path(output_path),
+        "feature_bundle_sha256": _sha256(output_path),
+        "metadata": _portable_path(args.metadata),
+        "metadata_sha256": _sha256(args.metadata),
+        "toolchain": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+        },
         "scope_note": "LLaVA output contains image-text rows only because the adapter requires an image.",
     }
     (args.output_dir / "feature_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -142,7 +191,11 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
 
 def _write_adapter_metadata(path: Path, rows: list[dict[str, str]], *, mask: bool) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["sample_id", "text", "image_path"])
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["sample_id", "text", "image_path"],
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
             text = row["prompt_text"]
@@ -182,6 +235,22 @@ def _attribution_summary(original: np.ndarray, masked: np.ndarray, image: np.nda
             text_image_cosine,
         ]
     )
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(REPOSITORY_ROOT.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 if __name__ == "__main__":

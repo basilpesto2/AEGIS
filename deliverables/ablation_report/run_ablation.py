@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
+import platform
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -13,7 +15,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent
 DELIVERABLES = ROOT.parent
-PIPELINE = DELIVERABLES / "reproducible_pipeline"
+REPOSITORY = DELIVERABLES.parent
+PIPELINE = DELIVERABLES / "pipeline"
 sys.path.insert(0, str(PIPELINE))
 
 from aegis_research.experiment import ExperimentConfig, fit_evaluate_view, run_ablation_suite  # noqa: E402
@@ -22,7 +25,7 @@ from aegis_research.metrics import classification_metrics  # noqa: E402
 from aegis_research.signals import binary_entropy, build_feature_views  # noqa: E402
 
 
-DEFAULT_METADATA = DELIVERABLES / "annotated_benchmark" / "data" / "benchmark.csv"
+DEFAULT_METADATA = DELIVERABLES / "benchmark" / "data" / "benchmark.csv"
 DEFAULT_FEATURES = PIPELINE / "fixtures" / "smoke_features.npz"
 
 
@@ -30,8 +33,35 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the AEGIS ablation and transfer report.")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--features", type=Path, default=DEFAULT_FEATURES)
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "results")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=ROOT / "runs" / "reproduction_v1",
+        help="Versioned output directory; committed historical results are never overwritten by default.",
+    )
+    parser.add_argument("--report", type=Path, help="Report path; defaults to OUTPUT_DIR/REPORT.md.")
+    parser.add_argument("--adaptive-summary", type=Path)
+    parser.add_argument("--adaptive-scores", type=Path)
+    parser.add_argument("--adaptive-detector", type=Path)
+    parser.add_argument("--adaptive-features", type=Path)
+    parser.add_argument("--force", action="store_true", help="Allow replacement of an existing run directory.")
     args = parser.parse_args()
+    orphaned_adaptive = [
+        name
+        for name, value in (
+            ("--adaptive-scores", args.adaptive_scores),
+            ("--adaptive-detector", args.adaptive_detector),
+            ("--adaptive-features", args.adaptive_features),
+        )
+        if value is not None and args.adaptive_summary is None
+    ]
+    if orphaned_adaptive:
+        parser.error(
+            "--adaptive-summary is required when using "
+            + ", ".join(orphaned_adaptive)
+        )
+    report_path = args.report or args.output_dir / "REPORT.md"
+    _prepare_output(args.output_dir, report_path, force=args.force)
     metadata = load_metadata(args.metadata)
     bundle = load_feature_bundle(args.features, metadata)
     labels = np.asarray([int(row["label_id"]) for row in metadata], dtype=np.int64)
@@ -59,15 +89,17 @@ def main() -> None:
     _write_csv(args.output_dir / "attack_family_transfer.csv", transfer_rows)
     uncertainty_rows = _uncertainty_coverage(metadata, all_metrics)
     _write_csv(args.output_dir / "uncertainty_coverage.csv", uncertainty_rows)
-    adaptive_path = DELIVERABLES / "red_teaming" / "generated" / "adaptive_summary.json"
     adaptive_rows: list[dict[str, object]] = []
-    if adaptive_path.exists():
-        adaptive_rows = list(json.loads(adaptive_path.read_text(encoding="utf-8"))["summary"])
+    adaptive_provenance = None
+    if args.adaptive_summary is not None:
+        adaptive_rows, adaptive_provenance = _load_adaptive_evidence(args, parser)
         _write_csv(args.output_dir / "adaptive_redteam_summary.csv", adaptive_rows)
 
     provenance = {
-        "metadata": str(args.metadata),
-        "features": str(args.features),
+        "metadata": _portable_path(args.metadata),
+        "metadata_sha256": _sha256(args.metadata),
+        "features": _portable_path(args.features),
+        "features_sha256": _sha256(args.features),
         "feature_source": bundle.feature_source,
         "rows": len(metadata),
         "selection": "feature view and threshold use validation data only",
@@ -77,11 +109,156 @@ def main() -> None:
             if bundle.feature_source.startswith("deterministic_smoke")
             else "model_evidence_requires_manifest_review"
         ),
+        "adaptive_evidence": adaptive_provenance,
+        "runtime_context": _current_runtime_context(),
+        "tool_versions": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+        },
     }
     (args.output_dir / "run_manifest.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report = _render_report(full_rows, low_label_summary, transfer_rows, uncertainty_rows, adaptive_rows, provenance)
-    (ROOT / "REPORT.md").write_text(report, encoding="utf-8")
-    print(json.dumps({"report": str(ROOT / "REPORT.md"), **provenance}, indent=2))
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    print(json.dumps({"report": _portable_path(report_path), **provenance}, indent=2))
+
+
+def _prepare_output(output_dir: Path, report_path: Path, *, force: bool) -> None:
+    existing = []
+    if output_dir.exists():
+        existing.extend(path for path in output_dir.iterdir())
+    if report_path.exists() and report_path.parent != output_dir:
+        existing.append(report_path)
+    if existing and not force:
+        raise FileExistsError(
+            f"refusing to overwrite an existing evidence run at {output_dir}; "
+            "choose a new --output-dir or pass --force explicitly"
+        )
+
+
+def _load_adaptive_evidence(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    required = {
+        "--adaptive-scores": args.adaptive_scores,
+        "--adaptive-detector": args.adaptive_detector,
+        "--adaptive-features": args.adaptive_features,
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        parser.error(
+            "--adaptive-summary requires " + ", ".join(sorted(missing))
+        )
+    payload = json.loads(args.adaptive_summary.read_text(encoding="utf-8"))
+    rows = list(payload.get("summary", []))
+    if not rows:
+        raise ValueError("adaptive summary does not contain result rows")
+    with np.load(args.adaptive_detector, allow_pickle=False) as detector:
+        detector_threshold = float(np.asarray(detector["threshold"]).reshape(-1)[0])
+        metadata_json = json.loads(
+            str(np.asarray(detector["metadata_json"]).reshape(-1)[0])
+        )
+    with np.load(args.adaptive_features, allow_pickle=False) as features:
+        feature_source = str(np.asarray(features["feature_source"]).reshape(-1)[0])
+    summary_thresholds = [float(row["threshold"]) for row in rows]
+    if any(
+        not math.isclose(value, detector_threshold, rel_tol=0.0, abs_tol=1e-12)
+        for value in summary_thresholds
+    ):
+        raise ValueError(
+            "adaptive summary threshold does not match the supplied fixture detector"
+        )
+    with args.adaptive_scores.open("r", encoding="utf-8-sig", newline="") as handle:
+        score_rows = list(csv.DictReader(handle))
+    if not score_rows or any(row.get("label_id") != "1" for row in score_rows):
+        raise ValueError("adaptive scores must be a non-empty malicious-only panel")
+    score_thresholds = [_recorded_detector_threshold(row) for row in score_rows]
+    if any(value is None for value in score_thresholds) or any(
+        not math.isclose(
+            float(value),
+            detector_threshold,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+        for value in score_thresholds
+    ):
+        raise ValueError("adaptive score thresholds do not match the detector")
+    score_views = {row["feature_view"] for row in score_rows}
+    if score_views != {str(metadata_json["feature_view"])}:
+        raise ValueError("adaptive score feature view does not match the detector")
+    return rows, {
+        "summary": _portable_path(args.adaptive_summary),
+        "summary_sha256": _sha256(args.adaptive_summary),
+        "scores": _portable_path(args.adaptive_scores),
+        "scores_sha256": _sha256(args.adaptive_scores),
+        "detector": _portable_path(args.adaptive_detector),
+        "detector_sha256": _sha256(args.adaptive_detector),
+        "features": _portable_path(args.adaptive_features),
+        "features_sha256": _sha256(args.adaptive_features),
+        "feature_source": feature_source,
+        "feature_view": str(metadata_json["feature_view"]),
+        "threshold": detector_threshold,
+        "threshold_kind": "fixture_detector_block_threshold",
+        "selection_policy": "bounded best-of-N over a fixed ordered variant panel",
+    }
+
+
+def _current_runtime_context() -> dict[str, object]:
+    pyproject = (REPOSITORY / "pyproject.toml").read_text(encoding="utf-8")
+    version = next(
+        line.split("=", 1)[1].strip().strip('"')
+        for line in pyproject.splitlines()
+        if line.startswith("version =")
+    )
+    config_path = REPOSITORY / "configs" / "aegis.llava.deployment.container.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    detector_path = REPOSITORY / str(config["detector"])
+    with np.load(detector_path, allow_pickle=False) as detector:
+        detector_context = {
+            "source": str(np.asarray(detector["source"]).reshape(-1)[0]),
+            "model_family": str(np.asarray(detector["model_family"]).reshape(-1)[0]),
+            "model_id": str(np.asarray(detector["model_id"]).reshape(-1)[0]),
+            "model_revision": str(
+                np.asarray(detector["model_revision"]).reshape(-1)[0]
+            ),
+            "tokenizer_revision": str(
+                np.asarray(detector["tokenizer_revision"]).reshape(-1)[0]
+            ),
+            "preprocessing_sha256": str(
+                np.asarray(detector["preprocessing_sha256"]).reshape(-1)[0]
+            ),
+            "pooling": str(np.asarray(detector["pooling"]).reshape(-1)[0]),
+            "feature_dim": int(np.asarray(detector["weights"]).size),
+            "block_threshold": float(
+                np.asarray(detector["threshold"]).reshape(-1)[0]
+            ),
+        }
+    return {
+        "aegis_version": version,
+        "target_profile": config["target_profile"],
+        "traffic_mode": config["traffic_mode"],
+        "detector": config["detector"],
+        "detector_sha256": _sha256(detector_path),
+        "review_threshold": config["policy"]["review_threshold"],
+        **detector_context,
+    }
+
+
+def _portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(REPOSITORY.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _with_importance(results: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -185,6 +362,16 @@ def _render_report(
     provenance: dict[str, object],
 ) -> str:
     status = str(provenance["scientific_status"])
+    runtime = dict(provenance["runtime_context"])
+    adaptive_status = (
+        "No adaptive fixture panel was attached to this run."
+        if provenance["adaptive_evidence"] is None
+        else (
+            "The attached panel uses the 8-dimensional fixture detector at threshold "
+            f"`{provenance['adaptive_evidence']['threshold']}`; it does not use the "
+            "deployed LLaVA detector."
+        )
+    )
     lines = [
         "# AEGIS signal-importance and transferability ablation report",
         "",
@@ -195,11 +382,22 @@ def _render_report(
         "training, validation, thresholding, low-label, uncertainty, transfer, and reporting path. "
         "It is not evidence of MLLM safety performance.",
         "",
+        "## Relationship to the current runtime",
+        "",
+        f"The current AEGIS `{runtime['aegis_version']}` LLaVA profile uses "
+        f"`{runtime['detector']}` (SHA-256 `{runtime['detector_sha256']}`), an "
+        f"{runtime['feature_dim']}-dimensional `{runtime['pooling']}` detector with block "
+        f"threshold `{runtime['block_threshold']}` and review threshold "
+        f"`{runtime['review_threshold']}`. The tables below use a separate deterministic "
+        "fixture and must not be cited as tuned-v3 accuracy, attack-success, or robustness "
+        "measurements. Current functional runtime evidence is recorded in "
+        "`deliverables/runtime_validation/`.",
+        "",
         "## Protocol",
         "",
         "Matched benign/adversarial groups remain in one split. Classifier fitting uses training "
         "rows, threshold selection uses validation rows, and the test split is not used for "
-        "selection. The primary detector is class-balanced logistic regression over pooled "
+        "selection. The fixture experiment detector is class-balanced logistic regression over pooled "
         "representations and compact signals.",
         "",
         "## Signal importance",
@@ -233,34 +431,38 @@ def _render_report(
         "Rows are ranked for review by normalized binary entropy. This table exposes the "
         "coverage/accuracy trade-off rather than treating near-threshold decisions as certain.",
         "",
-        "## Bounded adaptive red-team evaluation",
+        "## Bounded best-of-N fixture evasion",
         "",
         _markdown_table(adaptive, ["query_budget", "n_samples", "threshold", "malicious_recall", "evasion_rate", "mean_worst_case_score"]) if adaptive else "No scored adaptive panel was available for this run.",
         "",
-        "The bounded adversary selects the lowest detector score among the first N deterministic "
-        "variants. These smoke results intentionally reveal that the lightweight fixture detector "
-        "is brittle; they measure detector evasion, not harmful MLLM response generation.",
+        "The evaluator selects the lowest detector score in hindsight among the first N fixed, "
+        "deterministic variants. This is a bounded best-of-N oracle analysis, not a sequential "
+        "adaptive attack policy. These smoke results measure fixture-detector evasion, not harmful "
+        "MLLM response generation. " + adaptive_status,
         "",
         "## Legacy MLLM evidence",
         "",
         "`legacy_evidence.csv` preserves aggregate values reported in commit `3f6e46a`. The "
         "underlying processed data, embeddings, and output tables were ignored and are absent, "
-        "so these values are historical context only—not independently rerun results.",
+        "so these values are historical context only - not independently rerun results.",
         "",
         "## Conclusions",
         "",
-        "The recovered framework now measures representation, modality, consistency, attribution, "
+        "The framework measures representation, modality, consistency, attribution, "
         "uncertainty, label-efficiency, and held-family transfer independently. Scientific claims "
         "remain conditional on replacing the smoke fixture with provenance-complete MLLM features "
-        "and rerunning this exact report.",
+        "and rerunning this report into a new versioned output directory.",
         "",
         "## Reproduction",
         "",
         "```powershell",
-        "python deliverables/annotated_benchmark/build_assets.py",
-        "node deliverables/annotated_benchmark/build_workbook.mjs",
-        "python deliverables/reproducible_pipeline/scripts/build_smoke_features.py",
-        "python deliverables/ablation_report/run_ablation.py",
+        '$run = "deliverables/reproductions/ablation_v1"',
+        "",
+        "python deliverables/pipeline/scripts/build_smoke_features.py `",
+        '  --output "$run/benchmark_smoke_features.npz"',
+        "python deliverables/ablation_report/run_ablation.py `",
+        '  --features "$run/benchmark_smoke_features.npz" `',
+        '  --output-dir "$run/results"',
         "```",
         "",
     ]
@@ -286,9 +488,29 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
     if not rows:
         raise ValueError(f"cannot write empty result table: {path}")
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(rows[0]),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _recorded_detector_threshold(row: dict[str, str]) -> float | None:
+    values = [
+        float(row[name])
+        for name in ("detector_threshold", "threshold")
+        if row.get(name, "").strip()
+    ]
+    if not values:
+        return None
+    if any(
+        not math.isclose(value, values[0], rel_tol=0.0, abs_tol=1e-12)
+        for value in values[1:]
+    ):
+        raise ValueError("adaptive score row contains conflicting threshold aliases")
+    return values[0]
 
 
 if __name__ == "__main__":

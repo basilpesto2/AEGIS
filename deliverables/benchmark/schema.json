@@ -5,7 +5,7 @@
   "required": [
     "sample_id", "split", "group_id", "label", "label_id", "modality",
     "prompt_text", "image_path", "harm_category", "attack_style",
-    "paired_attack_style", "scenario_theme", "policy_rationale",
+    "paired_attack_style", "scenario_theme", "obfuscation_type", "policy_rationale",
     "annotation_method", "annotation_confidence", "annotation_status",
     "pii_status", "content_safety", "source", "license",
     "benchmark_version", "prompt_sha256", "image_sha256"
@@ -21,9 +21,63 @@
     "image_path": {"type": "string"},
     "harm_category": {"type": "string"},
     "attack_style": {"type": "string"},
+    "paired_attack_style": {"type": "string", "minLength": 1},
+    "scenario_theme": {"type": "string", "minLength": 1},
+    "obfuscation_type": {"type": "string", "minLength": 1},
+    "policy_rationale": {"type": "string", "minLength": 1},
+    "annotation_method": {"type": "string", "minLength": 1},
     "annotation_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "annotation_status": {"type": "string", "minLength": 1},
+    "pii_status": {"type": "string", "minLength": 1},
+    "content_safety": {"const": "operational_details_redacted"},
+    "source": {"type": "string", "minLength": 1},
+    "license": {"type": "string", "minLength": 1},
+    "benchmark_version": {"const": "1.0.0"},
     "prompt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "image_sha256": {"type": "string", "pattern": "^$|^[a-f0-9]{64}$"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "label": {"const": "benign"}
+        }
+      },
+      "then": {
+        "properties": {
+          "label_id": {"const": 0},
+          "harm_category": {"const": "none"},
+          "attack_style": {"const": "none"}
+        }
+      },
+      "else": {
+        "properties": {
+          "label_id": {"const": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "modality": {"const": "text"}
+        }
+      },
+      "then": {
+        "properties": {
+          "image_path": {"const": ""},
+          "image_sha256": {"const": ""}
+        }
+      },
+      "else": {
+        "properties": {
+          "image_path": {"type": "string", "minLength": 1},
+          "image_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": true
 }

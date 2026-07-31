@@ -1,0 +1,170 @@
+{
+  "schema_version": 2,
+  "validation_date": "2026-07-31",
+  "status": "pass_with_stock_profile_resource_constraint",
+  "scope": "cleaned AEGIS CLI, image, CUDA, authenticated API, LLaVA inference, runtime traffic control, and local GUI",
+  "repository": {
+    "validated_tracked_operational_source_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
+    "validation_execution_commit_before_squash": "b0a4aca0eadfdf61e2eecd615de0417689729e00",
+    "validation_execution_tree_before_squash": "23673aaa080320a5ba919b7229d5206291d28378",
+    "validation_execution_parent_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
+    "validated_tracked_operational_scope": [
+      ".dockerignore",
+      ".env.example",
+      ".gitignore",
+      "AEGIS",
+      "configs",
+      "models",
+      "compose.yaml",
+      "Dockerfile",
+      "pyproject.toml",
+      "requirements-runtime.constraints.txt",
+      "start-aegis.ps1",
+      "stop-aegis.ps1"
+    ],
+    "changed_non_executable_build_input": {
+      "path": "README.md",
+      "copied_by_dockerfile": true,
+      "execution_effect": "changes documentation, package metadata, and reproducible image bytes, but not AEGIS executable modules, configs, or model artifacts",
+      "note": "The root README changed during deliverable cleanup and restoration, so it is deliberately excluded from the byte-identity claim. The recorded Docker image ID belongs to the pre-squash execution and is not a promised rebuild identity at the surviving source anchor."
+    },
+    "untracked_model_cache_note": "Git scope alignment covers tracked files only. The ignored Hugging Face model cache used by the validation is covered separately by the recorded model/tokenizer revisions, preprocessing fingerprint, and cache size.",
+    "history_note": "The live validation ran on b0a4aca0eadfdf61e2eecd615de0417689729e00 before three local commits were squashed. That former execution hash is retained as provenance. Commit 71a183bd10a102324a7c782155075e977d0e83ae remains in history and has an identical tracked operational scope.",
+    "package_version": "0.3.0",
+    "relevant_commits": {
+      "runtime_traffic_controls": "8e5433441aa6901b9dfd3ec23a7aa94c252652d5",
+      "llava_tuned_v3": "197d24cc125d9ce574097297302175ecab29e7d4",
+      "gui_and_launchers": "71a183bd10a102324a7c782155075e977d0e83ae"
+    }
+  },
+  "docker": {
+    "desktop_version": "4.83.0",
+    "client_version": "29.6.2",
+    "engine_version": "29.6.2",
+    "compose_version": "5.3.1",
+    "context": "desktop-linux",
+    "memory_bytes": 8172240896,
+    "image": {
+      "tag": "aegis-mllm-guard:local",
+      "id": "sha256:13fcdaf769d026e799ace7cf22ffa093c9365ea699e98f3b55cac6d9131e8f5b",
+      "fresh_build_passed": true,
+      "runtime_tests_directory_present": false,
+      "runtime_deliverables_directory_present": false
+    }
+  },
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "gpu_memory_bytes": 8585216000,
+    "cuda_available": true
+  },
+  "llava_artifact": {
+    "path": "models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz",
+    "sha256": "9816ed0b706b3d0e01162701310ad77bc795c7dd99f7e2e6da4133d6fa299587",
+    "source": "generic_intent_v2_plus_aegis_benchmark_v1_llava_onevision_05b_text_tokens_tuned_v3",
+    "model_family": "llava_onevision",
+    "model_id": "models\\huggingface\\llava-onevision-qwen2-0.5b-ov-hf",
+    "feature_dim": 896,
+    "pooling": "text_tokens",
+    "layer": -1,
+    "model_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+    "tokenizer_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+    "preprocessing_sha256": "6489dbc60aafa141b68ee59270232517fbd2c921d32a3a2ddaf4f09aad38cff9",
+    "block_threshold": 0.6909739881800183,
+    "review_threshold": 0.23579741243702598
+  },
+  "stock_compose_profile": {
+    "target_profile": "llava05b",
+    "started": false,
+    "failure_kind": "resource_preflight",
+    "oom_killed": false,
+    "required_available_physical_bytes": 2147483648,
+    "observed_available_physical_bytes_min": 1848307712,
+    "observed_available_physical_bytes_max": 1949958144,
+    "passed_checks": {
+      "total_physical_memory": true,
+      "available_virtual_memory": true,
+      "disk_free": true,
+      "model_cache_size": true,
+      "cuda_device_memory": true
+    },
+    "model_cache_bytes": 1798933359
+  },
+  "ephemeral_validation": {
+    "production_configuration_modified": false,
+    "target_profile": null,
+    "min_available_physical_bytes": 1610612736,
+    "ready_http": 200,
+    "ready_ok": true,
+    "worker_mode": "process",
+    "worker_ready": true,
+    "worker_restarts": 0,
+    "traffic_mode_initial": "shadow",
+    "authentication": {
+      "unauthenticated_guard_http": 401,
+      "authenticated_metrics_http": 200,
+      "authenticated_guard_http": 200
+    },
+    "guard_smoke": {
+      "trace_id": "smoke-image-002",
+      "request_id": "smoke-image-002",
+      "modality": "image_text",
+      "verdict": "benign",
+      "action": "allow",
+      "recommended_action": "allow",
+      "enforcement_action": "allow",
+      "risk_score": 0.012664712937979744,
+      "traffic_mode": "shadow"
+    },
+    "traffic_mode_round_trip": [
+      "shadow",
+      "review",
+      "shadow"
+    ]
+  },
+  "gui": {
+    "status_http": 200,
+    "service_connected": true,
+    "service_ready": true,
+    "metrics_error": null,
+    "home_http": 200,
+    "evaluate_http": 200,
+    "history_record_completed": true,
+    "decision": {
+      "verdict": "benign",
+      "action": "allow",
+      "modality": "image_text"
+    },
+    "single_request_duration_ms": 445.32309999340214,
+    "shutdown_http": 202,
+    "process_exit_code": 0
+  },
+  "post_restoration_docker_recheck": {
+    "docker_engine_running": true,
+    "desktop_version": "4.83.0",
+    "engine_version": "29.6.2",
+    "container_log_observations": {
+      "authentication_required": true,
+      "traffic_mode": "shadow",
+      "warmup_completed": true,
+      "health_checks_passed": 5,
+      "approximate_runtime_minutes": 33,
+      "exit_code": 0
+    },
+    "ports_after_exit": {
+      "8766_listening": false,
+      "8767_listening": false
+    },
+    "scope_note": "This recheck confirmed Docker state, startup logs, health checks, clean exit, and closed ports; it did not repeat the earlier API or GUI requests."
+  },
+  "qwen": {
+    "tested": false,
+    "reason": "requires 15 GiB total memory and a prepared model cache; Docker exposed 7.61 GiB and the cache was absent"
+  },
+  "teardown": {
+    "temporary_validation_container_removed": true,
+    "test_audit_file_removed": true,
+    "temporary_gui_history_removed": true,
+    "port_8766_listening": false,
+    "port_8767_listening": false
+  }
+}

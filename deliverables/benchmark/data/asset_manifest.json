@@ -1,5 +1,6 @@
 {
   "benchmark_version": "1.0.0",
+  "csv_sha256": "ed2ab26b2a4383944badcf24d32ed55ea2d0cc372e22cfe66d273e740e7d7e7c",
   "image_count": 44,
   "label_counts": {
     "benign": 32,

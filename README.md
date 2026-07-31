@@ -13,8 +13,11 @@ AEGIS does not answer the prompt or automatically forward it to another model. Y
 application sends the prompt to AEGIS first, reads the decision, and decides what to
 do next.
 
-The deliverable artifacts—pipeline, red-teaming tools, annotated benchmark,
-and ablation report—are organized under [`deliverables/`](deliverables/README.md).
+Final Report evidence—including the annotated benchmark, research pipeline,
+red-team fixtures, ablation results, and current runtime-validation record—is
+preserved under [`deliverables/`](deliverables/README.md). These artifacts document
+the work completed; they are intentionally separate from the files required to
+install and operate the CLI, service, or GUI.
 
 ## Start here if you are new
 

@@ -12,5 +12,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install -r deliverables/reproducible_pipeline/requirements.txt
+      - run: python -m pip install -r deliverables/pipeline/requirements.txt
       - run: python deliverables/ci/run_checks.py

@@ -14,41 +14,44 @@ if (!Array.isArray(rows) || rows.length === 0) {
 
 const headers = Object.keys(rows[0]);
 const matrix = [headers, ...rows.map((row) => headers.map((header) => row[header] ?? ""))];
+const lastColumn = columnName(headers.length);
+const lastRow = matrix.length;
+const tailStartRow = Math.max(2, lastRow - 11);
 const workbook = Workbook.create();
 const summary = workbook.worksheets.add("Summary");
 const benchmark = workbook.worksheets.add("Benchmark");
 const dictionary = workbook.worksheets.add("Data Dictionary");
 
 benchmark.getRangeByIndexes(0, 0, matrix.length, headers.length).values = matrix;
-benchmark.tables.add(`A1:${columnName(headers.length)}${matrix.length}`, true, "BenchmarkTable");
+benchmark.tables.add(`A1:${lastColumn}${lastRow}`, true, "BenchmarkTable");
 benchmark.freezePanes.freezeRows(1);
 benchmark.freezePanes.freezeColumns(4);
 benchmark.showGridLines = false;
-benchmark.getRange(`A1:${columnName(headers.length)}1`).format = {
+benchmark.getRange(`A1:${lastColumn}1`).format = {
   fill: "#17324D",
   font: { bold: true, color: "#FFFFFF" },
   wrapText: true,
   verticalAlignment: "center",
 };
-benchmark.getRange(`A2:${columnName(headers.length)}${matrix.length}`).format = {
+benchmark.getRange(`A2:${lastColumn}${lastRow}`).format = {
   font: { color: "#172B3A" },
   verticalAlignment: "top",
 };
-benchmark.getRange("E2:E65").format.numberFormat = "0";
-benchmark.getRange("P2:P65").format.numberFormat = "0.00";
-benchmark.getRange("A1:X1").format.rowHeight = 34;
-benchmark.getRange("A2:X65").format.rowHeight = 44;
+benchmark.getRange(`E2:E${lastRow}`).format.numberFormat = "0";
+benchmark.getRange(`P2:P${lastRow}`).format.numberFormat = "0.00";
+benchmark.getRange(`A1:${lastColumn}1`).format.rowHeight = 34;
 benchmark.getRange("A:A").format.columnWidth = 25;
 benchmark.getRange("B:F").format.columnWidth = 15;
 benchmark.getRange("G:G").format.columnWidth = 54;
 benchmark.getRange("H:N").format.columnWidth = 24;
 benchmark.getRange("O:X").format.columnWidth = 30;
-benchmark.getRange(`A1:${columnName(headers.length)}${matrix.length}`).format.wrapText = true;
-benchmark.getRange("D2:D65").conditionalFormats.add("containsText", {
+benchmark.getRange(`A1:${lastColumn}${lastRow}`).format.wrapText = true;
+benchmark.getRange(`A2:${lastColumn}${lastRow}`).format.autofitRows();
+benchmark.getRange(`D2:D${lastRow}`).conditionalFormats.add("containsText", {
   text: "malicious",
   format: { fill: "#FCE8E6", font: { color: "#A61B1B", bold: true } },
 });
-benchmark.getRange("D2:D65").conditionalFormats.add("containsText", {
+benchmark.getRange(`D2:D${lastRow}`).conditionalFormats.add("containsText", {
   text: "benign",
   format: { fill: "#E7F5EC", font: { color: "#176B3A" } },
 });
@@ -69,9 +72,9 @@ summary.getRange("A3:B7").values = [
   ["Malicious rows", null],
   ["Balanced?", null],
 ];
-summary.getRange("B4").formulas = [["=COUNTA('Benchmark'!$A$2:$A$65)"]];
-summary.getRange("B5").formulas = [["=COUNTIF('Benchmark'!$D$2:$D$65,\"benign\")"]];
-summary.getRange("B6").formulas = [["=COUNTIF('Benchmark'!$D$2:$D$65,\"malicious\")"]];
+summary.getRange("B4").formulas = [[`=COUNTA('Benchmark'!$A$2:$A$${lastRow})`]];
+summary.getRange("B5").formulas = [[`=COUNTIF('Benchmark'!$D$2:$D$${lastRow},"benign")`]];
+summary.getRange("B6").formulas = [[`=COUNTIF('Benchmark'!$D$2:$D$${lastRow},"malicious")`]];
 summary.getRange("B7").formulas = [["=IF(B5=B6,\"PASS\",\"FAIL\")"]];
 
 summary.getRange("D3:F7").values = [
@@ -82,8 +85,8 @@ summary.getRange("D3:F7").values = [
   ["Total", null, null],
 ];
 for (let row = 4; row <= 6; row += 1) {
-  summary.getRange(`E${row}`).formulas = [[`=COUNTIFS('Benchmark'!$B$2:$B$65,D${row},'Benchmark'!$D$2:$D$65,\"benign\")`]];
-  summary.getRange(`F${row}`).formulas = [[`=COUNTIFS('Benchmark'!$B$2:$B$65,D${row},'Benchmark'!$D$2:$D$65,\"malicious\")`]];
+  summary.getRange(`E${row}`).formulas = [[`=COUNTIFS('Benchmark'!$B$2:$B$${lastRow},D${row},'Benchmark'!$D$2:$D$${lastRow},"benign")`]];
+  summary.getRange(`F${row}`).formulas = [[`=COUNTIFS('Benchmark'!$B$2:$B$${lastRow},D${row},'Benchmark'!$D$2:$D$${lastRow},"malicious")`]];
 }
 summary.getRange("E7").formulas = [["=SUM(E4:E6)"]];
 summary.getRange("F7").formulas = [["=SUM(F4:F6)"]];
@@ -103,7 +106,7 @@ summary.getRange("A10:B18").values = [
   ...attackStyles.map((style) => [style, null]),
 ];
 for (let row = 11; row <= 18; row += 1) {
-  summary.getRange(`B${row}`).formulas = [[`=COUNTIF('Benchmark'!$J$2:$J$65,A${row})`]];
+  summary.getRange(`B${row}`).formulas = [[`=COUNTIF('Benchmark'!$J$2:$J$${lastRow},A${row})`]];
 }
 summary.getRange("D10:E13").values = [
   ["Modality", "Rows"],
@@ -111,8 +114,8 @@ summary.getRange("D10:E13").values = [
   ["image_text", null],
   ["Total", null],
 ];
-summary.getRange("E11").formulas = [["=COUNTIF('Benchmark'!$F$2:$F$65,D11)"]];
-summary.getRange("E12").formulas = [["=COUNTIF('Benchmark'!$F$2:$F$65,D12)"]];
+summary.getRange("E11").formulas = [[`=COUNTIF('Benchmark'!$F$2:$F$${lastRow},D11)`]];
+summary.getRange("E12").formulas = [[`=COUNTIF('Benchmark'!$F$2:$F$${lastRow},D12)`]];
 summary.getRange("E13").formulas = [["=SUM(E11:E12)"]];
 
 for (const range of ["A3:B3", "D3:F3", "A10:B10", "D10:E10"]) {
@@ -129,6 +132,23 @@ summary.getRange("B7").conditionalFormats.add("containsText", {
   text: "PASS",
   format: { fill: "#E7F5EC", font: { color: "#176B3A", bold: true } },
 });
+summary.getRange("A20:H20").merge();
+summary.getRange("A21:H22").merge();
+summary.getRange("A20").values = [["Evidence boundary"]];
+summary.getRange("A21").values = [[
+  "This workbook documents a synthetic, safety-redacted dataset. It is not a performance report for the deployed LLaVA tuned-v3 detector; current live-system evidence is recorded under deliverables/runtime_validation/."
+]];
+summary.getRange("A20:H20").format = {
+  fill: "#315B7D",
+  font: { bold: true, color: "#FFFFFF" },
+};
+summary.getRange("A21:H22").format = {
+  fill: "#EEF4F8",
+  font: { color: "#172B3A", italic: true },
+  wrapText: true,
+  verticalAlignment: "top",
+};
+summary.getRange("A21:H22").format.autofitRows();
 summary.freezePanes.freezeRows(1);
 
 const descriptions = {
@@ -169,23 +189,21 @@ dictionary.getRange("B:B").format.columnWidth = 72;
 dictionary.getRange("C:C").format.columnWidth = 12;
 dictionary.getRange(`A1:C${dictionaryRows.length}`).format.wrapText = true;
 dictionary.getRange("A1:C1").format.rowHeight = 28;
-dictionary.getRange(`A2:C${dictionaryRows.length}`).format.rowHeight = 30;
+dictionary.getRange(`A2:C${dictionaryRows.length}`).format.autofitRows();
 dictionary.freezePanes.freezeRows(1);
 dictionary.showGridLines = false;
 
-const csvText = matrix.map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
-await fs.writeFile(path.join(dataDir, "benchmark.csv"), csvText, "utf8");
-
 const xlsx = await SpreadsheetFile.exportXlsx(workbook);
-await xlsx.save(path.join(root, "benchmark.xlsx"));
+const workbookPath = path.join(root, "benchmark.xlsx");
+await xlsx.save(workbookPath);
 
 const qaDir = path.join(root, "qa");
 await fs.mkdir(qaDir, { recursive: true });
 for (const previewSpec of [
-  { sheetName: "Summary", range: "A1:H18", file: "summary.png" },
-  { sheetName: "Benchmark", range: "A1:X12", file: "benchmark_head.png" },
-  { sheetName: "Benchmark", range: "A54:X65", file: "benchmark_tail.png" },
-  { sheetName: "Data Dictionary", range: "A1:C25", file: "data_dictionary.png" },
+  { sheetName: "Summary", range: "A1:H22", file: "summary.png" },
+  { sheetName: "Benchmark", range: `A1:${lastColumn}12`, file: "benchmark_head.png" },
+  { sheetName: "Benchmark", range: `A${tailStartRow}:${lastColumn}${lastRow}`, file: "benchmark_tail.png" },
+  { sheetName: "Data Dictionary", range: `A1:C${dictionaryRows.length}`, file: "data_dictionary.png" },
 ]) {
   const preview = await workbook.render({ sheetName: previewSpec.sheetName, range: previewSpec.range, scale: 1, format: "png" });
   await fs.writeFile(path.join(qaDir, previewSpec.file), new Uint8Array(await preview.arrayBuffer()));
@@ -193,7 +211,7 @@ for (const previewSpec of [
 
 const check = await workbook.inspect({
   kind: "table",
-  range: "Summary!A1:F18",
+  range: "Summary!A1:H22",
   include: "values,formulas",
   tableMaxRows: 20,
   tableMaxCols: 8,
@@ -205,13 +223,8 @@ const errors = await workbook.inspect({
   summary: "final formula error scan",
 });
 await fs.writeFile(path.join(qaDir, "workbook_inspect.ndjson"), `${check.ndjson}\n${errors.ndjson}\n`, "utf8");
-console.log(JSON.stringify({ rows: rows.length, columns: headers.length, csv: "data/benchmark.csv", workbook: "benchmark.xlsx" }));
-
-
-function csvCell(value) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
+await fs.rm(`${workbookPath}.inspect.ndjson`, { force: true });
+console.log(JSON.stringify({ rows: rows.length, columns: headers.length, source: "data/benchmark_rows.json", workbook: "benchmark.xlsx" }));
 
 
 function columnName(count) {

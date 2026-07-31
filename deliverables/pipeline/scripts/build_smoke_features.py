@@ -4,16 +4,18 @@ import argparse
 import csv
 import hashlib
 import json
+import platform
 import sys
 from pathlib import Path
 
 import numpy as np
+import PIL
 from PIL import Image
 
 
 PIPELINE_ROOT = Path(__file__).resolve().parents[1]
 DELIVERABLES_ROOT = PIPELINE_ROOT.parent
-DEFAULT_METADATA = DELIVERABLES_ROOT / "annotated_benchmark" / "data" / "benchmark.csv"
+DEFAULT_METADATA = DELIVERABLES_ROOT / "benchmark" / "data" / "benchmark.csv"
 DEFAULT_OUTPUT = PIPELINE_ROOT / "fixtures" / "smoke_features.npz"
 DIMENSION = 32
 
@@ -23,7 +25,13 @@ def main() -> None:
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--asset-root", type=Path)
+    parser.add_argument("--force", action="store_true", help="Replace an existing bundle and manifest.")
     args = parser.parse_args()
+    manifest_path = args.output.with_suffix(".manifest.json")
+    existing = [path for path in (args.output, manifest_path) if path.exists()]
+    if existing and not args.force:
+        names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(f"refusing to overwrite existing evidence: {names}; choose a new --output or use --force")
     with args.metadata.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     if not rows:
@@ -47,19 +55,26 @@ def main() -> None:
         feature_source=np.asarray(["deterministic_smoke_fixture_not_mllm_evidence"]),
     )
     manifest = {
+        "schema_version": 2,
         "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
         "purpose": "end-to-end software verification only",
         "rows": len(rows),
         "id_column": id_column,
-        "asset_root": str(asset_root),
+        "asset_root": _portable_path(asset_root),
         "text_dimension": DIMENSION,
         "image_dimension": DIMENSION,
         "attribution_dimension": int(attribution.shape[1]),
+        "metadata": _portable_path(args.metadata),
         "metadata_sha256": _sha256(args.metadata),
         "bundle_sha256": _sha256(args.output),
-        "extractor": str(Path(__file__).relative_to(DELIVERABLES_ROOT.parent)),
+        "extractor": Path(__file__).relative_to(DELIVERABLES_ROOT.parent).as_posix(),
+        "toolchain": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "pillow": PIL.__version__,
+        },
     }
-    args.output.with_suffix(".manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps(manifest, indent=2, sort_keys=True))
@@ -122,6 +137,15 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    repository_root = DELIVERABLES_ROOT.parent.resolve()
+    try:
+        return resolved.relative_to(repository_root).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 if __name__ == "__main__":

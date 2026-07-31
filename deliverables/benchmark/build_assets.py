@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import textwrap
@@ -307,6 +308,23 @@ def main() -> None:
     _validate(rows)
     rows_path = DATA_DIR / "benchmark_rows.json"
     rows_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    csv_path = DATA_DIR / "benchmark.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(rows[0]),
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        writer.writerows(
+            {
+                key: int(value)
+                if isinstance(value, float) and value.is_integer()
+                else value
+                for key, value in row.items()
+            }
+            for row in rows
+        )
     manifest = {
         "benchmark_version": VERSION,
         "rows": len(rows),
@@ -315,6 +333,7 @@ def main() -> None:
         "modality_counts": _counts(rows, "modality"),
         "malicious_attack_style_counts": _counts([row for row in rows if row["label_id"] == 1], "attack_style"),
         "rows_json_sha256": _sha256(rows_path),
+        "csv_sha256": _sha256(csv_path),
         "image_count": sum(bool(row["image_path"]) for row in rows),
     }
     (DATA_DIR / "asset_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")

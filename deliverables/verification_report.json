@@ -1,33 +1,76 @@
 {
+  "artifact_set_sha256": "f3fef505716b73f63e9073f1fda306aaff3e6ad77fd715c6ec03e8d37252a481",
   "checks": [
     {
-      "name": "deliverable_subdirectories",
+      "detail": [
+        "ablation_report",
+        "benchmark",
+        "ci",
+        "pipeline",
+        "red_teaming",
+        "runtime_validation"
+      ],
+      "name": "scope_required_directories",
+      "passed": true
+    },
+    {
+      "detail": {
+        "directories": [],
+        "files": []
+      },
+      "name": "scope_no_unexpected_top_level_entries",
+      "passed": true
+    },
+    {
+      "detail": [],
+      "name": "scope_no_symlinks_or_junctions",
+      "passed": true
+    },
+    {
+      "detail": [],
+      "name": "scope_no_generated_scratch",
+      "passed": true
+    },
+    {
+      "name": "scope_frozen_byte_identity_attributes",
       "passed": true
     },
     {
       "detail": 64,
-      "name": "benchmark_row_count_64",
+      "name": "benchmark_row_count",
       "passed": true
     },
     {
-      "name": "benchmark_balanced",
+      "detail": {
+        "extra": [],
+        "missing": []
+      },
+      "name": "benchmark_schema_columns",
       "passed": true
     },
     {
-      "name": "benchmark_split_balance",
+      "name": "benchmark_schema_relationship_rules",
       "passed": true
     },
     {
-      "name": "benchmark_unique_ids",
+      "name": "benchmark_csv_json_full_alignment",
       "passed": true
     },
     {
-      "name": "benchmark_unique_prompt_hashes",
+      "name": "benchmark_balanced_labels",
+      "passed": true
+    },
+    {
+      "name": "benchmark_split_label_balance",
+      "passed": true
+    },
+    {
+      "name": "benchmark_unique_identifiers",
       "passed": true
     },
     {
       "detail": 32,
-      "name": "benchmark_pair_group_isolation",
+      "name": "benchmark_pair_split_isolation",
       "passed": true
     },
     {
@@ -41,139 +84,307 @@
         "safety_camouflage": 4,
         "text_obfuscation": 4
       },
-      "name": "benchmark_eight_attack_styles",
+      "name": "benchmark_attack_style_coverage",
       "passed": true
     },
     {
-      "name": "benchmark_modalities",
-      "passed": true
-    },
-    {
-      "detail": 44,
-      "name": "benchmark_content_hashes",
-      "passed": true
-    },
-    {
-      "name": "benchmark_csv_json_alignment",
-      "passed": true
-    },
-    {
-      "name": "benchmark_workbook_exists",
-      "passed": true
-    },
-    {
-      "name": "benchmark_workbook_formula_scan",
-      "passed": true
-    },
-    {
-      "detail": 48,
-      "name": "redteam_variant_rows_48",
+      "name": "benchmark_modality_counts",
       "passed": true
     },
     {
       "detail": {
-        "aegis-v1-004-malicious": 6,
-        "aegis-v1-008-malicious": 6,
-        "aegis-v1-012-malicious": 6,
-        "aegis-v1-016-malicious": 6,
-        "aegis-v1-020-malicious": 6,
-        "aegis-v1-024-malicious": 6,
-        "aegis-v1-028-malicious": 6,
-        "aegis-v1-032-malicious": 6
+        "images": 44
       },
-      "name": "redteam_six_variants_per_sample",
+      "name": "benchmark_relationships_and_hashes",
       "passed": true
     },
     {
-      "name": "redteam_variant_families",
+      "name": "benchmark_asset_manifest",
       "passed": true
     },
     {
-      "name": "redteam_content_hashes",
+      "detail": {
+        "errors": [],
+        "formulas": 23,
+        "sheets": [
+          "Summary",
+          "Benchmark",
+          "Data Dictionary"
+        ]
+      },
+      "name": "benchmark_workbook_structure",
       "passed": true
     },
     {
-      "name": "redteam_scored_alignment",
+      "name": "benchmark_workbook_qa",
       "passed": true
     },
     {
-      "name": "redteam_bounded_adaptive_budgets",
+      "detail": {
+        "attribution": [
+          64,
+          8
+        ],
+        "image": [
+          64,
+          32
+        ],
+        "source": "deterministic_smoke_fixture_not_mllm_evidence",
+        "text": [
+          64,
+          32
+        ]
+      },
+      "name": "pipeline_feature_bundle_contract",
+      "passed": true
+    },
+    {
+      "detail": {
+        "feature_dim": 8,
+        "feature_source": "deterministic_smoke_fixture_not_mllm_evidence",
+        "feature_view": "attribution",
+        "selection_rule": "maximum validation AUPRC then AUROC",
+        "threshold": 0.8202568457258909
+      },
+      "name": "pipeline_fixture_detector_contract",
+      "passed": true
+    },
+    {
+      "name": "pipeline_test_prediction_alignment",
+      "passed": true
+    },
+    {
+      "name": "pipeline_historical_scope_disclaimer",
+      "passed": true
+    },
+    {
+      "name": "pipeline_reproduction_dependencies_pinned",
+      "passed": true
+    },
+    {
+      "name": "pipeline_feature_schema_provenance",
       "passed": true
     },
     {
       "detail": [
-        0.25,
-        0.625,
-        1.0
+        "pipeline/artifacts/smoke/selected_detector.npz",
+        "pipeline/fixtures/smoke_features.npz"
       ],
-      "name": "redteam_adaptive_monotonic",
+      "name": "pipeline_frozen_byte_identities",
       "passed": true
     },
     {
-      "name": "redteam_attack_success_evaluator",
+      "detail": {
+        "base_samples": 8,
+        "rows": 48
+      },
+      "name": "redteam_fixed_panel_shape",
       "passed": true
     },
     {
-      "name": "pipeline_feature_alignment",
+      "detail": {
+        "relocated_paths": 40
+      },
+      "name": "redteam_hashes_and_historical_relocation",
       "passed": true
     },
     {
-      "name": "pipeline_feature_shapes",
+      "name": "redteam_scored_panel_alignment",
       "passed": true
     },
     {
-      "name": "pipeline_smoke_label",
+      "detail": [
+        {
+          "evasion_rate": 0.25,
+          "malicious_recall": 0.75,
+          "mean_worst_case_score": 0.8509169015585352,
+          "n_samples": 8,
+          "query_budget": 1,
+          "threshold": 0.8202568457258909
+        },
+        {
+          "evasion_rate": 0.625,
+          "malicious_recall": 0.375,
+          "mean_worst_case_score": 0.6473493839662411,
+          "n_samples": 8,
+          "query_budget": 3,
+          "threshold": 0.8202568457258909
+        },
+        {
+          "evasion_rate": 1.0,
+          "malicious_recall": 0.0,
+          "mean_worst_case_score": 0.573158479515896,
+          "n_samples": 8,
+          "query_budget": 6,
+          "threshold": 0.8202568457258909
+        }
+      ],
+      "name": "redteam_best_of_n_recomputed",
       "passed": true
     },
     {
-      "name": "pipeline_detector_artifact",
+      "name": "redteam_response_schema_runtime_conditions",
       "passed": true
     },
     {
-      "name": "pipeline_validation_only_selection_documented",
+      "name": "redteam_evidence_boundary_documented",
       "passed": true
     },
     {
-      "name": "pipeline_mllm_extractor",
+      "detail": [
+        "red_teaming/generated/scored_variants.csv",
+        "red_teaming/generated/variant_smoke_features.npz",
+        "red_teaming/generated/variants.csv"
+      ],
+      "name": "redteam_frozen_byte_identities",
       "passed": true
     },
     {
-      "name": "ablation_seven_signal_views",
+      "detail": {
+        "adaptive_redteam_summary.csv": 3,
+        "attack_family_transfer.csv": 16,
+        "feature_signal_ablation.csv": 7,
+        "low_label_seed_runs.csv": 20,
+        "low_label_summary.csv": 4,
+        "uncertainty_coverage.csv": 4
+      },
+      "name": "ablation_result_table_shapes",
       "passed": true
     },
     {
-      "name": "ablation_low_label_seed_sweep",
+      "detail": [],
+      "name": "ablation_numeric_results_finite",
       "passed": true
     },
     {
-      "name": "ablation_sixteen_transfer_rows",
+      "name": "ablation_adaptive_table_alignment",
       "passed": true
     },
     {
-      "name": "ablation_uncertainty_coverage",
+      "name": "ablation_report_evidence_boundaries",
       "passed": true
     },
     {
-      "name": "ablation_adaptive_results",
+      "name": "ablation_historical_provenance_mapped",
       "passed": true
     },
     {
-      "name": "ablation_report_sections",
+      "detail": {
+        "package_version": "0.3.0",
+        "validated_tracked_operational_scope_paths": 12,
+        "validated_tracked_operational_source_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
+        "validation_execution_commit_before_squash": "b0a4aca0eadfdf61e2eecd615de0417689729e00",
+        "validation_execution_parent_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
+        "validation_execution_tree_before_squash": "23673aaa080320a5ba919b7229d5206291d28378"
+      },
+      "name": "runtime_record_identity",
       "passed": true
     },
     {
-      "name": "ablation_smoke_disclaimer",
+      "name": "runtime_operational_source_commit_exists",
+      "passed": true
+    },
+    {
+      "detail": {
+        "anchor": "71a183bd10a102324a7c782155075e977d0e83ae",
+        "paths": [
+          ".dockerignore",
+          ".env.example",
+          ".gitignore",
+          "AEGIS",
+          "configs",
+          "models",
+          "compose.yaml",
+          "Dockerfile",
+          "pyproject.toml",
+          "requirements-runtime.constraints.txt",
+          "start-aegis.ps1",
+          "stop-aegis.ps1"
+        ]
+      },
+      "name": "runtime_tracked_operational_scope_alignment",
+      "passed": true
+    },
+    {
+      "name": "runtime_source_scope_qualifications",
+      "passed": true
+    },
+    {
+      "detail": {
+        "feature_dim": 896,
+        "layer": -1,
+        "pooling": "text_tokens",
+        "sha256": "9816ed0b706b3d0e01162701310ad77bc795c7dd99f7e2e6da4133d6fa299587"
+      },
+      "name": "runtime_tuned_v3_artifact_contract",
+      "passed": true
+    },
+    {
+      "name": "runtime_config_record_alignment",
+      "passed": true
+    },
+    {
+      "name": "runtime_target_profile_alignment",
+      "passed": true
+    },
+    {
+      "name": "runtime_functional_record_complete",
+      "passed": true
+    },
+    {
+      "name": "runtime_post_restoration_docker_recheck",
+      "passed": true
+    },
+    {
+      "name": "runtime_resource_constraint_qualified",
+      "passed": true
+    },
+    {
+      "name": "runtime_evidence_limits_documented",
       "passed": true
     },
     {
       "detail": 18,
-      "name": "python_syntax",
+      "name": "source_python_syntax",
+      "passed": true
+    },
+    {
+      "detail": 15,
+      "name": "source_json_parse",
+      "passed": true
+    },
+    {
+      "detail": [],
+      "name": "source_no_stale_executable_paths",
+      "passed": true
+    },
+    {
+      "name": "source_ci_read_only_verifier",
+      "passed": true
+    },
+    {
+      "name": "source_reproduction_validation_record",
+      "passed": true
+    },
+    {
+      "detail": "f3fef505716b73f63e9073f1fda306aaff3e6ad77fd715c6ec03e8d37252a481",
+      "name": "manifest_update_round_trip",
       "passed": true
     }
   ],
-  "checks_passed": 35,
-  "checks_total": 35,
-  "manifest_files": 118,
-  "manifest_total_bytes": 2028054,
-  "status": "pass"
+  "checks_passed": 55,
+  "checks_total": 55,
+  "generated_at_utc": "2026-07-31T08:59:10Z",
+  "manifest_files": 122,
+  "manifest_sha256": "c5f89be5890d5017ef63ffa87b066d048c6513e32137c1463805dece7802ea80",
+  "manifest_total_canonical_bytes": 2184726,
+  "schema_version": 2,
+  "status": "pass",
+  "toolchain": {
+    "numpy": "2.3.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.13"
+  },
+  "validated_tracked_operational_source_commit": "71a183bd10a102324a7c782155075e977d0e83ae",
+  "verifier_version": "2.0.0"
 }

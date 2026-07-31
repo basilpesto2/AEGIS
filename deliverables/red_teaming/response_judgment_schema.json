@@ -1,16 +1,171 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "AEGIS guarded-response judgment row",
+  "title": "AEGIS paired guarded-response judgment row",
   "type": "object",
-  "required": ["sample_id", "attack_style", "attack_succeeded", "guard_action"],
+  "required": [
+    "sample_id",
+    "attack_style",
+    "condition",
+    "attack_succeeded",
+    "effective_action",
+    "recommended_action",
+    "traffic_mode",
+    "downstream_disposition",
+    "judge_type",
+    "judge_version",
+    "response_sha256"
+  ],
   "properties": {
-    "sample_id": {"type": "string"},
-    "attack_style": {"type": "string"},
-    "attack_succeeded": {"enum": [0, 1, false, true]},
-    "guard_action": {"enum": ["allow", "review", "block"]},
-    "judge_type": {"enum": ["human", "validated_model", "lexical_proxy"]},
-    "judge_version": {"type": "string"},
-    "response_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    "sample_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attack_style": {
+      "type": "string",
+      "minLength": 1
+    },
+    "condition": {
+      "enum": [
+        "unguarded",
+        "guarded"
+      ]
+    },
+    "attack_succeeded": {
+      "enum": [
+        0,
+        1,
+        false,
+        true
+      ]
+    },
+    "effective_action": {
+      "enum": [
+        "not_applicable",
+        "allow",
+        "review",
+        "block"
+      ]
+    },
+    "recommended_action": {
+      "enum": [
+        "not_applicable",
+        "allow",
+        "review",
+        "block"
+      ]
+    },
+    "traffic_mode": {
+      "enum": [
+        "not_applicable",
+        "shadow",
+        "review",
+        "enforce"
+      ]
+    },
+    "downstream_disposition": {
+      "enum": [
+        "not_applicable",
+        "passed",
+        "reviewed",
+        "blocked"
+      ]
+    },
+    "judge_type": {
+      "enum": [
+        "human",
+        "validated_model"
+      ]
+    },
+    "judge_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "response_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "condition": {
+            "const": "unguarded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effective_action": {
+            "const": "not_applicable"
+          },
+          "recommended_action": {
+            "const": "not_applicable"
+          },
+          "traffic_mode": {
+            "const": "not_applicable"
+          },
+          "downstream_disposition": {
+            "const": "not_applicable"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "effective_action": {
+            "enum": [
+              "allow",
+              "review",
+              "block"
+            ]
+          },
+          "recommended_action": {
+            "enum": [
+              "allow",
+              "review",
+              "block"
+            ]
+          },
+          "traffic_mode": {
+            "enum": [
+              "shadow",
+              "review",
+              "enforce"
+            ]
+          },
+          "downstream_disposition": {
+            "enum": [
+              "passed",
+              "reviewed",
+              "blocked"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "condition": {
+            "const": "guarded"
+          },
+          "traffic_mode": {
+            "const": "shadow"
+          }
+        },
+        "required": [
+          "condition",
+          "traffic_mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "effective_action": {
+            "const": "allow"
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": true
 }

@@ -12,11 +12,64 @@
     "feature_source"
   ],
   "properties": {
-    "sample_ids": {"description": "Unique IDs in exact benchmark row order", "type": "array", "items": {"type": "string"}},
-    "text_embeddings": {"description": "Finite n by d pooled hidden-state matrix"},
-    "image_embeddings": {"description": "Finite n by d pooled image-token matrix; zero for text-only rows"},
-    "attribution_features": {"description": "Finite n by a aggregate perturbation or model-native attribution statistics"},
-    "feature_source": {"description": "Extractor/model provenance identifier", "type": "string"}
+    "sample_ids": {
+      "description": "Unique IDs in exact benchmark row order",
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "text_embeddings": {
+      "description": "Finite n by d pooled hidden-state matrix",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "number"}
+      }
+    },
+    "image_embeddings": {
+      "description": "Finite n by d pooled image-token matrix; zero for text-only rows",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "number"}
+      }
+    },
+    "attribution_features": {
+      "description": "Finite n by a aggregate perturbation or model-native attribution statistics",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "number"}
+      }
+    },
+    "feature_source": {
+      "description": "Extractor/model provenance identifier",
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance": {
+      "description": "Required companion-manifest fields for MLLM-derived evidence.",
+      "type": "object",
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1},
+        "model_revision": {"type": "string", "minLength": 1},
+        "tokenizer_revision": {"type": "string", "minLength": 1},
+        "layer": {"type": "integer"},
+        "pooling": {"type": "string", "minLength": 1},
+        "preprocessing_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "embedding_dimension": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    }
   },
   "additionalProperties": true
 }

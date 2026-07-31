@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,8 @@ REPOSITORY_ROOT = ROOT.parent
 
 
 def main() -> None:
+    environment = os.environ.copy()
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     commands = [
         [
             sys.executable,
@@ -17,14 +20,23 @@ def main() -> None:
             "unittest",
             "discover",
             "-s",
-            str(ROOT / "reproducible_pipeline" / "tests"),
+            str(ROOT / "pipeline" / "tests"),
             "-v",
         ],
-        [sys.executable, str(ROOT / "verify_deliverables.py")],
+        [
+            sys.executable,
+            str(ROOT / "verify_deliverables.py"),
+            "--check",
+        ],
     ]
     for command in commands:
         print(f"+ {' '.join(command)}", flush=True)
-        subprocess.run(command, cwd=REPOSITORY_ROOT, check=True)
+        subprocess.run(
+            command,
+            cwd=REPOSITORY_ROOT,
+            env=environment,
+            check=True,
+        )
     print("AEGIS deliverables CI: PASS")
 
 
