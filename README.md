@@ -13,7 +13,7 @@ AEGIS does not answer the prompt or automatically forward it to another model. Y
 application sends the prompt to AEGIS first, reads the decision, and decides what to
 do next.
 
-Final Report material—including the annotated benchmark, current research and
+Reference material—including the annotated benchmark, current research and
 red-teaming tools, ablation workflow, and runtime-validation record—is available
 under [`deliverables/`](deliverables/README.md). It documents the current project
 without being required to install or operate the CLI, service, or GUI.
