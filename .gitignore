@@ -11,3 +11,5 @@ dist/
 models/huggingface/
 outputs/
 deliverables/**/runs/
+
+/FYP Report/
