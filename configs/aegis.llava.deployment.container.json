@@ -9,12 +9,12 @@
     "fsync": false
   },
   "cache_dir": "/app/models/huggingface",
-  "detector": "models/aegis/aegis_llava_onevision_05b_text_detector_tuned_v3.npz",
+  "detector": "models/aegis/aegis_llava_onevision_05b_bordair_ocr_v6.npz",
   "name": "aegis-llava05b-container",
   "policy": {
     "action_on_error": "review",
     "block_threshold": null,
-    "review_threshold": 0.23579741243702598,
+    "review_threshold": 0.2792006876624334,
     "hash_images": true,
     "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
     "require_matching_provenance": true,
@@ -32,7 +32,7 @@
     "model_id": "models\\huggingface\\llava-onevision-qwen2-0.5b-ov-hf",
     "runtime_model_id": "models/huggingface/llava-onevision-qwen2-0.5b-ov-hf",
     "model_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
-    "pooling": "text_tokens",
+    "pooling": "image_tokens",
     "request_cache_max_entries": 128,
     "request_cache_ttl_seconds": 300.0,
     "tokenizer_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",

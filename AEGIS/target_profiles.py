@@ -88,11 +88,11 @@ _TARGET_PROFILES = {
     "qwen25vl3b": TargetProfile(
         name="qwen25vl3b",
         title="Qwen2.5-VL 3B controlled guard",
-        description="Image-text and text input guard using Qwen2.5-VL 3B hidden states.",
+        description="Image-text guard using Qwen2.5-VL 3B hidden states.",
         status="research_candidate",
         model_family="qwen25_vl",
-        intended_modalities=("text", "image_text"),
-        detector="models/aegis/aegis_qwen25vl3b_text_detector.npz",
+        intended_modalities=("image_text",),
+        detector="models/aegis/aegis_qwen25vl3b_bordair_ocr_v6.npz",
         provider="AEGIS.providers:Qwen25VLGuardrailProvider",
         provider_options={
             "environment_overrides": False,
@@ -101,7 +101,7 @@ _TARGET_PROFILES = {
             "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
             "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
             "layer": -1,
-            "pooling": "text_tokens",
+            "pooling": "image_tokens",
             "feature_dim": 2048,
             "torch_dtype": "auto",
             "device_map": "auto",
@@ -119,7 +119,7 @@ _TARGET_PROFILES = {
         cache_dir="models/huggingface",
         warmup_request_json="configs/service_warmup_request.example.json",
         require_cuda=True,
-        review_threshold=None,
+        review_threshold=0.34513525220153984,
         inference_timeout_seconds=120.0,
         worker_startup_timeout_seconds=900.0,
         resources={
@@ -131,8 +131,9 @@ _TARGET_PROFILES = {
             "min_model_cache_bytes": 6442450944,
         },
         caveats=(
-            "The detector predates immutable revision/preprocessing fields and must be rebuilt.",
-            "The latest Windows live probe failed because the paging file was too small.",
+            "Validated on neutrally rendered Bordair OCR cases, not unavailable native non-OCR images.",
+            "The family-disjoint internal test achieved full attack recall with a 2.5% false-positive rate.",
+            "The frozen final panel blocked all ten attacks but falsely blocked three of five benign controls.",
             "This profile is not approved for production blocking.",
         ),
     ),
@@ -145,7 +146,7 @@ _TARGET_PROFILES = {
         intended_modalities=("image_text",),
         detector=(
             "models/aegis/"
-            "aegis_llava_onevision_05b_text_detector_tuned_v3.npz"
+            "aegis_llava_onevision_05b_bordair_ocr_v6.npz"
         ),
         provider="AEGIS.providers:LlavaOnevisionGuardrailProvider",
         provider_options={
@@ -162,7 +163,7 @@ _TARGET_PROFILES = {
                 "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c"
             ),
             "layer": -1,
-            "pooling": "text_tokens",
+            "pooling": "image_tokens",
             "feature_dim": 896,
             "torch_dtype": "auto",
             "device_map": "auto",
@@ -185,7 +186,7 @@ _TARGET_PROFILES = {
         cache_dir="models/huggingface",
         warmup_request_json="configs/llava_service_warmup_request.example.json",
         require_cuda=True,
-        review_threshold=0.23579741243702598,
+        review_threshold=0.2792006876624334,
         inference_timeout_seconds=120.0,
         worker_startup_timeout_seconds=600.0,
         resources={
@@ -197,9 +198,9 @@ _TARGET_PROFILES = {
             "min_model_cache_bytes": 1610612736,
         },
         caveats=(
-            "The tuned-v3 detector adds a 204-row generic-intent and benchmark-replay adaptation panel.",
-            "The external four-prompt operator regression is held out from model and threshold selection.",
-            "Broader adjudicated real-traffic and adversarial coverage is still required.",
+            "Validated on neutrally rendered Bordair OCR cases, not unavailable native non-OCR images.",
+            "The family-disjoint internal test achieved full attack recall with a 6.25% false-positive rate.",
+            "The frozen final panel blocked all ten attacks but falsely blocked three of five benign controls.",
             "This profile is not approved for production blocking.",
         ),
     ),
