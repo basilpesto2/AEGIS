@@ -27,6 +27,10 @@ const INPUT_MODALITIES = new Set(["text", "image", "image_text"]);
 const DEFAULT_TEXT_LIMIT = 32_768;
 const DEFAULT_IMAGE_LIMIT = 8 * 1024 * 1024;
 const SETTINGS_POLL_INTERVAL_MS = 1500;
+const GUI_SESSION_HEADER = "X-AEGIS-GUI-Session";
+const GUI_SESSION_STORAGE_KEY = "aegis.gui.session.v1";
+const GUI_SESSION_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
+const guiSessionToken = establishGuiSession();
 
 const state = {
   activeRoute: "/",
@@ -53,6 +57,8 @@ const state = {
   settingsDesired: null,
   settingsPollTimer: null,
   dialogReturnFocus: null,
+  historyImageUrls: [],
+  historyImageRequest: 0,
 };
 
 const elements = {
@@ -153,6 +159,51 @@ function initialize() {
   setSettingsLoading();
   activateRoute(routeForPath(window.location.pathname), { initial: true });
   loadStatus();
+}
+
+function establishGuiSession() {
+  let token = "";
+  const fragment = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : "";
+  if (fragment) {
+    const params = new URLSearchParams(fragment);
+    const candidates = params.getAll("session");
+    const keys = Array.from(params.keys());
+    if (
+      candidates.length === 1 &&
+      keys.length === 1 &&
+      keys[0] === "session" &&
+      GUI_SESSION_PATTERN.test(candidates[0])
+    ) {
+      token = candidates[0];
+      try {
+        window.sessionStorage.setItem(GUI_SESSION_STORAGE_KEY, token);
+      } catch {
+        // The in-memory token remains usable when browser storage is unavailable.
+      }
+    }
+    if (params.has("session")) {
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+  }
+  if (!token) {
+    try {
+      const stored = window.sessionStorage.getItem(GUI_SESSION_STORAGE_KEY) ?? "";
+      if (GUI_SESSION_PATTERN.test(stored)) {
+        token = stored;
+      } else if (stored) {
+        window.sessionStorage.removeItem(GUI_SESSION_STORAGE_KEY);
+      }
+    } catch {
+      // A fresh launch fragment is required when browser storage is unavailable.
+    }
+  }
+  return token;
 }
 
 function bindEvents() {
@@ -522,6 +573,7 @@ function normalizeSettings(payload) {
             : [],
           trafficMode: String(target.traffic_mode ?? "shadow"),
           status: String(target.status ?? "unknown"),
+          detectorMode: String(target.detector_mode ?? "single"),
           caveats: toStringArray(target.caveats),
         }))
     : [];
@@ -538,6 +590,7 @@ function normalizeSettings(payload) {
       trafficMode: String(currentPayload.traffic_mode ?? "shadow"),
       modelId: String(currentPayload.model_id ?? "—"),
       ready: Boolean(currentPayload.ready),
+      detectorMode: String(currentPayload.detector_mode ?? "single"),
       runtimeTrafficModeControl: Boolean(
         currentPayload.runtime_traffic_mode_control,
       ),
@@ -654,6 +707,11 @@ function createTargetOption(target, index, selectedTarget, currentTarget) {
       target.inputModalities.length
         ? formatInputModalities(target.inputModalities)
         : "Inputs unknown",
+    ),
+    createElement(
+      "span",
+      "",
+      target.detectorMode === "or" ? "Dual-head OR" : "Single detector",
     ),
     createElement("span", "", humanize(target.trafficMode)),
   );
@@ -1282,6 +1340,34 @@ function renderDecision(container, view, options = {}) {
   riskPanel.append(thresholdCopy);
   wrapper.append(riskPanel);
 
+  if (view.headDecisions.length) {
+    const heads = createElement("section", "head-decision-panel");
+    heads.append(createElement("span", "", "Detector heads"));
+    const grid = createElement("div", "head-decision-grid");
+    view.headDecisions.forEach((head) => {
+      const card = createElement("div", "head-decision-card");
+      card.dataset.tone = toneFor(head.recommendedAction);
+      const decisive = head.name === view.decisiveHead;
+      card.dataset.decisive = decisive ? "true" : "false";
+      card.append(
+        createElement(
+          "strong",
+          "",
+          `${humanize(head.name)} head${decisive ? " (decisive)" : ""}`,
+        ),
+        createElement(
+          "span",
+          "",
+          head.riskScore === null ? "Risk unknown" : `Risk ${formatPercent(head.riskScore)}`,
+        ),
+        createElement("small", "", humanize(head.recommendedAction)),
+      );
+      grid.append(card);
+    });
+    heads.append(grid);
+    wrapper.append(heads);
+  }
+
   const reasons = createElement("section", "reason-panel");
   reasons.append(createElement("span", "", "Signals"));
   const chips = createElement("div", "chip-list");
@@ -1400,11 +1486,25 @@ function decisionView(result, additions = {}) {
     summary.recommended_action ??
     effectiveAction;
   const verdict = String(decision.verdict ?? result?.verdict ?? "unknown");
+  const headDecisions = Array.isArray(decision.head_decisions)
+    ? decision.head_decisions
+        .filter((head) => head && typeof head === "object")
+        .map((head) => ({
+          name: String(head.name ?? "unknown"),
+          riskScore: toFiniteNumber(head.risk_score),
+          recommendedAction: String(head.recommended_action ?? "unknown"),
+          threshold: toFiniteNumber(head.threshold),
+          reviewThreshold: toFiniteNumber(head.review_threshold),
+        }))
+    : [];
 
   return {
     effectiveAction: String(effectiveAction),
     recommendedAction: String(recommendedAction),
     verdict,
+    decisiveHead:
+      typeof decision.decisive_head === "string" ? decision.decisive_head : null,
+    headDecisions,
     assessment: primaryAssessment(verdict, recommendedAction),
     riskScore: toFiniteNumber(decision.risk_score ?? result?.risk_score),
     blockThreshold: toFiniteNumber(
@@ -1794,6 +1894,7 @@ function showDialog() {
 }
 
 function closeHistoryDialog() {
+  releaseHistoryImageUrls();
   if (typeof elements.historyDialog.close === "function") {
     elements.historyDialog.close();
   } else {
@@ -1929,6 +2030,8 @@ function renderDialogError(message) {
 }
 
 function renderHistoryDetail(record) {
+  releaseHistoryImageUrls();
+  const imageRequest = state.historyImageRequest;
   clearNode(elements.dialogContent);
   const view = historyRecordView(record);
   const layout = createElement("div", "detail-layout");
@@ -1971,11 +2074,15 @@ function renderHistoryDetail(record) {
     images.forEach((imageRecord, index) => {
       const figure = document.createElement("figure");
       const image = document.createElement("img");
-      image.src = imageRecord.url;
       image.alt = imageRecord.name
         ? `Submitted image: ${imageRecord.name}`
         : `Submitted image ${index + 1}`;
       image.loading = "lazy";
+      if (imageRecord.url.startsWith("data:") || imageRecord.url.startsWith("blob:")) {
+        image.src = imageRecord.url;
+      } else {
+        loadProtectedHistoryImage(image, imageRecord.url, imageRequest);
+      }
       figure.append(image);
       figure.append(
         createElement("figcaption", "", imageRecord.name || `Image ${index + 1}`),
@@ -2025,6 +2132,36 @@ function renderHistoryDetail(record) {
   }
 
   elements.dialogContent.append(layout);
+}
+
+function releaseHistoryImageUrls() {
+  state.historyImageRequest += 1;
+  state.historyImageUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.historyImageUrls = [];
+}
+
+async function loadProtectedHistoryImage(image, url, requestId) {
+  try {
+    const response = await requestApi(url, {
+      headers: { Accept: "image/png,image/jpeg,image/webp" },
+    });
+    if (!response.ok) {
+      throw new Error(`Image request failed (${response.status}).`);
+    }
+    const contentType = response.headers.get("Content-Type")?.split(";", 1)[0] ?? "";
+    if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
+      throw new Error("The history image response had an invalid media type.");
+    }
+    const objectUrl = URL.createObjectURL(await response.blob());
+    if (requestId !== state.historyImageRequest || !image.isConnected) {
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+    state.historyImageUrls.push(objectUrl);
+    image.src = objectUrl;
+  } catch {
+    image.alt = `${image.alt} (unavailable)`;
+  }
 }
 
 function collectImageSources(record) {
@@ -2082,11 +2219,7 @@ function safeImageUrl(value) {
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
-    cache: "no-store",
-    credentials: "same-origin",
-    ...options,
-  });
+  const response = await requestApi(url, options);
 
   let payload;
   try {
@@ -2107,6 +2240,24 @@ async function requestJson(url, options = {}) {
     throw new Error("Invalid server response.");
   }
   return payload;
+}
+
+async function requestApi(url, options = {}) {
+  if (!GUI_SESSION_PATTERN.test(guiSessionToken)) {
+    throw new Error("GUI session unavailable. Reopen the per-launch dashboard URL.");
+  }
+  const parsed = new URL(url, window.location.origin);
+  if (parsed.origin !== window.location.origin || !parsed.pathname.startsWith("/api/")) {
+    throw new Error("Refusing to send the GUI session token outside the local API.");
+  }
+  const headers = new Headers(options.headers ?? {});
+  headers.set(GUI_SESSION_HEADER, guiSessionToken);
+  return fetch(parsed.href, {
+    cache: "no-store",
+    credentials: "omit",
+    ...options,
+    headers,
+  });
 }
 
 function readFileAsBase64(file) {

@@ -2,25 +2,24 @@ from __future__ import annotations
 
 import base64
 import binascii
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
-import hmac
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+import ipaddress
 from importlib.resources import files
 from io import BytesIO
-import ipaddress
 import json
+import math
 from pathlib import Path
 import re
+import secrets
 import socket
 import sqlite3
 import time
 from threading import Condition, Lock, Thread
 from typing import Any, Callable, Iterator
-from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
-from urllib.request import build_opener, HTTPRedirectHandler, Request
 import uuid
 
 from PIL import Image, UnidentifiedImageError
@@ -30,7 +29,26 @@ from AEGIS.gui_control import (
     GUIControlBusyError,
     GUIControlError,
 )
-from AEGIS.gui_history import GUIHistoryStore, StoredImage
+from AEGIS.gui_history import (
+    GUIHistoryRetentionError,
+    GUIHistoryStore,
+    StoredImage,
+)
+from AEGIS.http_server import (
+    BoundedIPv6ThreadingHTTPServer,
+    BoundedThreadingHTTPServer,
+)
+from AEGIS.http_framing import (
+    RequestFramingError,
+    parse_request_content_length,
+)
+from AEGIS.http_transport import is_loopback_hostname, request_with_deadline
+from AEGIS.secret_validation import (
+    MIN_SECRET_CHARACTERS,
+    secret_matches,
+    validate_distinct_secrets,
+)
+from AEGIS.strict_json import strict_json_loads
 
 
 _MAX_GUI_BODY_BYTES = 16 * 1024 * 1024
@@ -47,6 +65,7 @@ _ALLOWED_IMAGE_TYPES = {
 }
 _INPUT_MODALITIES = ("text", "image", "image_text")
 _TRAFFIC_MODES = ("shadow", "review", "enforce")
+_GUI_SESSION_HEADER = "X-AEGIS-GUI-Session"
 _STATIC_ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/history": ("index.html", "text/html; charset=utf-8"),
@@ -71,16 +90,15 @@ _SECURITY_HEADERS = {
 }
 
 
-class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-class _IPv6ThreadingHTTPServer(ThreadingHTTPServer):
-    address_family = socket.AF_INET6
-
-
 class GUISubmissionError(ValueError):
+    pass
+
+
+class GUIShuttingDownError(RuntimeError):
+    pass
+
+
+class GUITargetChangingError(RuntimeError):
     pass
 
 
@@ -104,12 +122,18 @@ class _HistoryActivityBarrier:
         self._condition = Condition()
         self._active_evaluations = 0
         self._clearing = False
+        self._changing_target = False
+        self._draining = False
 
     @contextmanager
     def evaluation(self) -> Iterator[None]:
         with self._condition:
-            while self._clearing:
+            while self._clearing and not self._draining:
                 self._condition.wait()
+            if self._draining:
+                raise GUIShuttingDownError("The dashboard is shutting down.")
+            if self._changing_target:
+                raise GUITargetChangingError("The active detector target is changing.")
             self._active_evaluations += 1
         try:
             yield
@@ -120,8 +144,10 @@ class _HistoryActivityBarrier:
 
     def clear(self, operation: Callable[[], dict[str, int]]) -> dict[str, int]:
         with self._condition:
-            while self._clearing:
+            while (self._clearing or self._changing_target) and not self._draining:
                 self._condition.wait()
+            if self._draining:
+                raise GUIShuttingDownError("The dashboard is shutting down.")
             self._clearing = True
             while self._active_evaluations:
                 self._condition.wait()
@@ -132,30 +158,175 @@ class _HistoryActivityBarrier:
                 self._clearing = False
                 self._condition.notify_all()
 
-    def wait_until_idle(self) -> None:
+    @contextmanager
+    def target_change(self) -> Iterator[None]:
+        """Drain evaluations and reject new ones while a target is replaced."""
+
         with self._condition:
+            if self._draining:
+                raise GUIShuttingDownError("The dashboard is shutting down.")
+            if self._changing_target:
+                raise GUIControlBusyError()
+            self._changing_target = True
             while self._active_evaluations or self._clearing:
                 self._condition.wait()
+                if self._draining:
+                    self._changing_target = False
+                    self._condition.notify_all()
+                    raise GUIShuttingDownError("The dashboard is shutting down.")
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._changing_target = False
+                self._condition.notify_all()
+
+    def wait_until_idle(self) -> None:
+        with self._condition:
+            while (
+                self._active_evaluations
+                or self._clearing
+                or self._changing_target
+            ):
+                self._condition.wait()
+
+    def begin_shutdown(self) -> None:
+        with self._condition:
+            self._draining = True
+            self._condition.notify_all()
+
+    def begin_shutdown_and_wait(self) -> None:
+        self.begin_shutdown()
+        self.wait_until_idle()
+
+
+class _GUILifecycle:
+    """Coordinate one idempotent drain across HTTP and process shutdown paths."""
+
+    def __init__(
+        self,
+        history_activity: _HistoryActivityBarrier,
+        target_controller: ComposeTargetController,
+    ) -> None:
+        self._history_activity = history_activity
+        self._target_controller = target_controller
+        self._condition = Condition()
+        self._requested = False
+        self._waiting = False
+        self._drained = False
+
+    @property
+    def requested(self) -> bool:
+        with self._condition:
+            return self._requested
+
+    def begin(self) -> bool:
+        """Reject new work immediately and report whether drain was already requested."""
+
+        with self._condition:
+            already_requested = self._requested
+            if already_requested:
+                return True
+            self._requested = True
+            self._history_activity.begin_shutdown()
+            self._target_controller.begin_shutdown()
+            self._condition.notify_all()
+            return False
+
+    def begin_and_wait(self) -> None:
+        self.begin()
+        with self._condition:
+            while self._waiting and not self._drained:
+                self._condition.wait()
+            if self._drained:
+                return
+            self._waiting = True
+        try:
+            self._history_activity.wait_until_idle()
+            self._target_controller.wait_until_idle()
+        except BaseException:
+            with self._condition:
+                self._waiting = False
+                self._condition.notify_all()
+            raise
+        else:
+            with self._condition:
+                self._drained = True
+                self._waiting = False
+                self._condition.notify_all()
 
 
 @dataclass(frozen=True)
 class GUIServerConfig:
     service_url: str = "http://127.0.0.1:8766"
     history_path: Path = Path.home() / ".aegis" / "gui-history.sqlite3"
-    api_token: str | None = None
+    history_max_records: int = 1000
+    history_max_age_days: float = 30.0
+    history_max_bytes: int = 268435456
+    api_token: str | None = field(default=None, repr=False)
+    admin_token: str | None = field(default=None, repr=False)
     upstream_timeout_seconds: float = 120.0
     project_root: Path = field(default_factory=Path.cwd)
-    target_switch_timeout_seconds: float = 900.0
+    target_switch_timeout_seconds: float = 1200.0
+    max_http_connections: int = 32
+    request_read_timeout_seconds: float = 15.0
+    session_token: str = field(
+        default_factory=lambda: secrets.token_urlsafe(32),
+        repr=False,
+    )
+    shutdown_token: str = field(
+        default_factory=lambda: secrets.token_urlsafe(32),
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
-        if self.upstream_timeout_seconds <= 0:
-            raise ValueError("upstream_timeout_seconds must be positive.")
-        if self.target_switch_timeout_seconds <= 0:
-            raise ValueError("target_switch_timeout_seconds must be positive.")
-        if self.api_token is not None and any(
-            character in self.api_token for character in ("\r", "\n")
+        _require_positive_finite(
+            self.upstream_timeout_seconds,
+            "upstream_timeout_seconds",
+        )
+        _require_positive_int(self.history_max_records, "history_max_records")
+        _require_positive_finite(self.history_max_age_days, "history_max_age_days")
+        _require_positive_int(self.history_max_bytes, "history_max_bytes")
+        _require_positive_finite(
+            self.target_switch_timeout_seconds,
+            "target_switch_timeout_seconds",
+        )
+        _require_positive_int(self.max_http_connections, "max_http_connections")
+        _require_positive_finite(
+            self.request_read_timeout_seconds,
+            "request_read_timeout_seconds",
+        )
+        for name, value in (
+            ("session_token", self.session_token),
+            ("shutdown_token", self.shutdown_token),
         ):
-            raise ValueError("api_token must not contain line breaks.")
+            if not isinstance(value, str) or re.fullmatch(
+                rf"[A-Za-z0-9_-]{{{MIN_SECRET_CHARACTERS},}}",
+                value,
+            ) is None:
+                raise ValueError(
+                    f"{name} must contain at least {MIN_SECRET_CHARACTERS} "
+                    "URL-safe visible ASCII characters."
+                )
+        for name, value in (
+            ("api_token", self.api_token),
+            ("admin_token", self.admin_token),
+        ):
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{name} must be a string when configured.")
+            if value is not None and any(
+                character in value for character in ("\r", "\n")
+            ):
+                raise ValueError(f"{name} must not contain line breaks.")
+        scoped_secrets = {
+            "session_token": self.session_token,
+            "shutdown_token": self.shutdown_token,
+            "api_token": self.api_token,
+            "admin_token": self.admin_token,
+        }
+        secret_problems = validate_distinct_secrets(scoped_secrets)
+        if secret_problems:
+            raise ValueError(" ".join(secret_problems))
 
 
 class GuardrailUpstream:
@@ -164,16 +335,33 @@ class GuardrailUpstream:
         service_url: str,
         *,
         api_token: str | None,
+        admin_token: str | None,
         timeout_seconds: float,
     ) -> None:
+        _require_positive_finite(timeout_seconds, "timeout_seconds")
         self._service_url = _validate_service_url(service_url)
         self._api_token = api_token
+        self._admin_token = admin_token
         self._timeout_seconds = float(timeout_seconds)
-        self._opener = build_opener(_NoRedirectHandler())
+        parsed = urlsplit(self._service_url)
+        self._credentialed_loopback = bool(
+            parsed.hostname and _is_loopback_host(parsed.hostname)
+        )
+        self._local_credential_guard: (
+            Callable[[str | None], AbstractContextManager[str]] | None
+        ) = None
 
     @property
     def service_url(self) -> str:
         return self._service_url
+
+    def set_local_credential_guard(
+        self,
+        guard: Callable[[str | None], AbstractContextManager[str]] | None,
+    ) -> None:
+        """Install the port-bound Compose ownership proof for local bearers."""
+
+        self._local_credential_guard = guard
 
     def evaluate(self, payload: dict[str, Any]) -> dict[str, Any]:
         trace_id = str(uuid.uuid4())
@@ -187,15 +375,19 @@ class GuardrailUpstream:
             "Content-Type": "application/json",
             "X-Request-ID": trace_id,
         }
+        expected_target = None
         if self._api_token is not None:
             headers["Authorization"] = f"Bearer {self._api_token}"
-        response, response_headers = self._request_json(
-            "/v1/guard",
-            method="POST",
-            data=body,
-            headers=headers,
-            timeout=self._timeout_seconds,
-        )
+            if self._credentialed_loopback:
+                expected_target = _credential_target(self.readiness())
+        with self._credential_scope(expected_target, self._api_token):
+            response, response_headers = self._request_json(
+                "/v1/guard",
+                method="POST",
+                data=body,
+                headers=headers,
+                timeout=self._timeout_seconds,
+            )
         if response.get("trace_id") != trace_id:
             raise UpstreamGuardrailError(
                 "The AEGIS service returned a mismatched trace identifier.",
@@ -230,24 +422,40 @@ class GuardrailUpstream:
 
         metrics = None
         metrics_error = None
-        metric_headers = {"Accept": "application/json"}
+        authenticated_readiness = readiness
+        authenticated_headers = {"Accept": "application/json"}
+        expected_target = None
         if self._api_token is not None:
-            metric_headers["Authorization"] = f"Bearer {self._api_token}"
+            authenticated_headers["Authorization"] = f"Bearer {self._api_token}"
         try:
-            metrics, _ = self._request_json(
-                "/metrics",
-                method="GET",
-                headers=metric_headers,
-                timeout=min(self._timeout_seconds, 5.0),
-            )
+            if self._api_token is not None and self._credentialed_loopback:
+                expected_target = _credential_target(readiness)
+            with self._credential_scope(expected_target, self._api_token):
+                if self._api_token is not None:
+                    authenticated_readiness, _ = self._request_json(
+                        "/v1/status",
+                        method="GET",
+                        headers=authenticated_headers,
+                        timeout=min(self._timeout_seconds, 5.0),
+                        accepted_statuses={
+                            HTTPStatus.OK,
+                            HTTPStatus.SERVICE_UNAVAILABLE,
+                        },
+                    )
+                metrics, _ = self._request_json(
+                    "/metrics",
+                    method="GET",
+                    headers=authenticated_headers,
+                    timeout=min(self._timeout_seconds, 5.0),
+                )
         except UpstreamGuardrailError as exc:
             metrics_error = {"code": exc.code, "message": str(exc)}
         return {
             "connected": True,
-            "ready": bool(readiness.get("ok")),
+            "ready": bool(authenticated_readiness.get("ok")),
             "error": None,
-            "readiness": readiness,
-            "capabilities": _readiness_capabilities(readiness),
+            "readiness": authenticated_readiness,
+            "capabilities": _readiness_capabilities(authenticated_readiness),
             "metrics": metrics,
             "metrics_error": metrics_error,
         }
@@ -262,6 +470,36 @@ class GuardrailUpstream:
         )
         return readiness
 
+    def authenticated_status(
+        self,
+        *,
+        expected_target: str,
+    ) -> dict[str, Any]:
+        """Read the full runtime identity only inside the local owner guard."""
+
+        if self._api_token is None:
+            raise UpstreamGuardrailError(
+                "The authenticated runtime status is unavailable without an API token.",
+                code="runtime_status_authentication_unavailable",
+                status=HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self._api_token}",
+        }
+        with self._credential_scope(expected_target, self._api_token):
+            response, _ = self._request_json(
+                "/v1/status",
+                method="GET",
+                headers=headers,
+                timeout=min(self._timeout_seconds, 5.0),
+                accepted_statuses={
+                    HTTPStatus.OK,
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                },
+            )
+        return response
+
     def input_capabilities(self) -> tuple[tuple[str, ...] | None, str | None]:
         readiness = self.readiness()
         capabilities = _readiness_capabilities(readiness)
@@ -274,7 +512,12 @@ class GuardrailUpstream:
             target_profile if isinstance(target_profile, str) else None,
         )
 
-    def set_traffic_mode(self, traffic_mode: str) -> dict[str, Any]:
+    def set_traffic_mode(
+        self,
+        traffic_mode: str,
+        *,
+        expected_target: str,
+    ) -> dict[str, Any]:
         body = json.dumps(
             {"traffic_mode": str(traffic_mode)},
             allow_nan=False,
@@ -284,21 +527,57 @@ class GuardrailUpstream:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        if self._api_token is not None:
-            headers["Authorization"] = f"Bearer {self._api_token}"
-        response, _ = self._request_json(
-            "/v1/admin/traffic-mode",
-            method="PUT",
-            data=body,
-            headers=headers,
-            timeout=min(self._timeout_seconds, 10.0),
-        )
+        if self._admin_token is not None:
+            headers["Authorization"] = f"Bearer {self._admin_token}"
+        with self._credential_scope(expected_target, self._admin_token):
+            response, _ = self._request_json(
+                "/v1/admin/traffic-mode",
+                method="PUT",
+                data=body,
+                headers=headers,
+                timeout=min(self._timeout_seconds, 10.0),
+            )
         if response.get("traffic_mode") != traffic_mode:
             raise UpstreamGuardrailError(
                 "The AEGIS service did not apply the requested traffic mode.",
                 code="invalid_upstream_response",
             )
         return response
+
+    @contextmanager
+    def _credential_scope(
+        self,
+        expected_target: str | None,
+        token: str | None,
+    ) -> Iterator[None]:
+        if token is None or not self._credentialed_loopback:
+            yield
+            return
+        guard = self._local_credential_guard
+        if guard is None:
+            raise UpstreamGuardrailError(
+                (
+                    "The local AEGIS bearer was not sent because listener "
+                    "ownership could not be proven."
+                ),
+                code="credential_owner_unverified",
+                status=HTTPStatus.BAD_GATEWAY,
+            )
+        entered = False
+        try:
+            with guard(expected_target):
+                entered = True
+                yield
+        except GUIControlError as exc:
+            # Request processing does not raise GUIControlError, so an error before
+            # entering the scope is an ownership/lifecycle failure from the guard.
+            if entered:
+                raise
+            raise UpstreamGuardrailError(
+                str(exc),
+                code=exc.code,
+                status=HTTPStatus.BAD_GATEWAY,
+            ) from None
 
     def _request_json(
         self,
@@ -310,30 +589,22 @@ class GuardrailUpstream:
         data: bytes | None = None,
         accepted_statuses: set[HTTPStatus] | None = None,
     ) -> tuple[dict[str, Any], Any]:
-        request = Request(
-            f"{self._service_url}{path}",
-            data=data,
-            headers=headers,
-            method=method,
-        )
         accepted = {int(item) for item in (accepted_statuses or {HTTPStatus.OK})}
         try:
-            with self._opener.open(request, timeout=timeout) as response:
-                status = int(response.status)
-                response_headers = response.headers
-                content_type = response.headers.get_content_type()
-                body = response.read(_MAX_UPSTREAM_RESPONSE_BYTES + 1)
-        except HTTPError as exc:
-            status = int(exc.code)
-            response_headers = exc.headers
-            content_type = exc.headers.get_content_type()
-            try:
-                body = exc.read(_MAX_UPSTREAM_RESPONSE_BYTES + 1)
-            finally:
-                exc.close()
-            if status not in accepted:
-                raise _upstream_http_error(status, content_type, body) from None
-        except (OSError, TimeoutError, URLError, ValueError):
+            response = request_with_deadline(
+                self._service_url,
+                path,
+                method=method,
+                headers=headers,
+                data=data,
+                timeout_seconds=timeout,
+                max_response_bytes=_MAX_UPSTREAM_RESPONSE_BYTES,
+            )
+            status = response.status
+            response_headers = response.headers
+            content_type = response.headers.get_content_type()
+            body = response.body
+        except (OSError, TimeoutError, ValueError):
             raise UpstreamGuardrailError(
                 "The AEGIS service could not be reached.",
                 code="service_unavailable",
@@ -348,8 +619,8 @@ class GuardrailUpstream:
                 code="invalid_upstream_response",
             )
         try:
-            payload = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            payload = strict_json_loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
             raise UpstreamGuardrailError(
                 "The AEGIS service returned unreadable JSON.",
                 code="invalid_upstream_response",
@@ -368,13 +639,19 @@ def create_gui_http_server(
     config: GUIServerConfig,
     *,
     target_controller: ComposeTargetController | None = None,
-) -> ThreadingHTTPServer:
+) -> BoundedThreadingHTTPServer:
     if not _is_loopback_host(host):
         raise ValueError("The AEGIS GUI may only bind to a loopback host.")
-    history = GUIHistoryStore(config.history_path)
+    history = GUIHistoryStore(
+        config.history_path,
+        max_records=config.history_max_records,
+        max_age_days=config.history_max_age_days,
+        max_bytes=config.history_max_bytes,
+    )
     upstream = GuardrailUpstream(
         config.service_url,
         api_token=config.api_token,
+        admin_token=config.admin_token,
         timeout_seconds=config.upstream_timeout_seconds,
     )
     controller = target_controller or ComposeTargetController(
@@ -382,14 +659,22 @@ def create_gui_http_server(
         upstream,
         startup_timeout_seconds=config.target_switch_timeout_seconds,
     )
+    credential_guard = getattr(controller, "credentialed_request", None)
+    upstream.set_local_credential_guard(
+        credential_guard if callable(credential_guard) else None
+    )
     history_activity = _HistoryActivityBarrier()
+    lifecycle = _GUILifecycle(history_activity, controller)
     assets = _load_static_assets()
     handler = _gui_handler_class(
         history,
         history_activity,
         upstream,
         controller,
-        config.api_token,
+        lifecycle,
+        config.shutdown_token,
+        config.session_token,
+        config.admin_token is not None,
         assets,
     )
     try:
@@ -397,12 +682,18 @@ def create_gui_http_server(
     except ValueError:
         address = None
     server_class = (
-        _IPv6ThreadingHTTPServer
+        BoundedIPv6ThreadingHTTPServer
         if isinstance(address, ipaddress.IPv6Address)
-        else ThreadingHTTPServer
+        else BoundedThreadingHTTPServer
     )
-    server = server_class((host, port), handler)
+    server = server_class(
+        (host, port),
+        handler,
+        max_http_connections=config.max_http_connections,
+        request_read_timeout_seconds=config.request_read_timeout_seconds,
+    )
     server.daemon_threads = True
+    server.begin_drain_and_wait = lifecycle.begin_and_wait  # type: ignore[attr-defined]
     return server
 
 
@@ -411,12 +702,13 @@ def _gui_handler_class(
     history_activity: _HistoryActivityBarrier,
     upstream: GuardrailUpstream,
     target_controller: ComposeTargetController,
-    shutdown_token: str | None,
+    lifecycle: _GUILifecycle,
+    shutdown_token: str,
+    session_token: str,
+    runtime_admin_token_configured: bool,
     assets: dict[str, tuple[bytes, str]],
 ):
     settings_lock = Lock()
-    shutdown_lock = Lock()
-    shutdown_state = {"requested": False}
     traffic_mode_preferences: dict[str, str] = {}
 
     class Handler(BaseHTTPRequestHandler):
@@ -424,6 +716,8 @@ def _gui_handler_class(
         sys_version = ""
 
         def do_GET(self) -> None:
+            if self._request_content_length(body_required=False) is None:
+                return
             if not self._trusted_host():
                 self._error(
                     HTTPStatus.FORBIDDEN,
@@ -440,6 +734,8 @@ def _gui_handler_class(
                     status=HTTPStatus.OK,
                     content_type=content_type,
                 )
+                return
+            if path.startswith("/api/") and not self._authorized_session():
                 return
             if path == "/api/status":
                 self._status()
@@ -471,6 +767,11 @@ def _gui_handler_class(
             )
 
         def do_POST(self) -> None:
+            parsed = urlsplit(self.path)
+            body_required = parsed.path == "/api/evaluate" and not parsed.query
+            length = self._request_content_length(body_required=body_required)
+            if length is None:
+                return
             if not self._trusted_host():
                 self._error(
                     HTTPStatus.FORBIDDEN,
@@ -478,9 +779,10 @@ def _gui_handler_class(
                     "The dashboard is available only through a loopback address.",
                 )
                 return
-            parsed = urlsplit(self.path)
             if parsed.path == "/api/shutdown" and not parsed.query:
                 self._shutdown()
+                return
+            if parsed.path.startswith("/api/") and not self._authorized_session():
                 return
             if parsed.path != "/api/evaluate" or parsed.query:
                 self._error(
@@ -504,17 +806,6 @@ def _gui_handler_class(
                     "Content-Type must be application/json.",
                 )
                 return
-            try:
-                length = int(self.headers.get("Content-Length", ""))
-            except ValueError:
-                length = -1
-            if length <= 0:
-                self._error(
-                    HTTPStatus.LENGTH_REQUIRED,
-                    "content_length_required",
-                    "A positive Content-Length is required.",
-                )
-                return
             if length > _MAX_GUI_BODY_BYTES:
                 self._error(
                     HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
@@ -522,10 +813,18 @@ def _gui_handler_class(
                     f"GUI request exceeds {_MAX_GUI_BODY_BYTES} bytes.",
                 )
                 return
+            encoded_body = self._read_request_body(length)
+            if encoded_body is None:
+                return
             try:
-                raw = json.loads(self.rfile.read(length).decode("utf-8"))
+                raw = strict_json_loads(encoded_body.decode("utf-8"))
                 payload, images = _normalize_submission(raw)
-            except (UnicodeDecodeError, json.JSONDecodeError, GUISubmissionError) as exc:
+            except (
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                GUISubmissionError,
+                ValueError,
+            ) as exc:
                 self._error(
                     HTTPStatus.BAD_REQUEST,
                     "invalid_submission",
@@ -533,49 +832,57 @@ def _gui_handler_class(
                 )
                 return
 
-            with history_activity.evaluation():
-                try:
-                    supported_modalities, target_profile = (
-                        upstream.input_capabilities()
-                    )
-                except UpstreamGuardrailError:
-                    # Older or temporarily unavailable services may not advertise a
-                    # contract. Preserve the existing forwarding behavior so the
-                    # upstream remains authoritative in that case.
-                    supported_modalities = None
-                    target_profile = None
-                modality = _submission_modality(payload)
-                if (
-                    supported_modalities is not None
-                    and modality not in supported_modalities
-                ):
-                    self._error(
-                        HTTPStatus.UNPROCESSABLE_ENTITY,
-                        "unsupported_modality",
-                        _unsupported_modality_message(
-                            modality,
-                            supported_modalities,
-                        ),
-                        error_details={
-                            "modality": modality,
-                            "supported_modalities": list(supported_modalities),
-                            "target_profile": target_profile,
-                        },
-                    )
-                    return
-                self._evaluate_submission(payload, images)
-
-        def _shutdown(self) -> None:
-            if shutdown_token is None:
+            try:
+                with history_activity.evaluation():
+                    try:
+                        supported_modalities, target_profile = (
+                            upstream.input_capabilities()
+                        )
+                    except UpstreamGuardrailError:
+                        # Older or temporarily unavailable services may not advertise a
+                        # contract. Preserve the existing forwarding behavior so the
+                        # upstream remains authoritative in that case.
+                        supported_modalities = None
+                        target_profile = None
+                    modality = _submission_modality(payload)
+                    if (
+                        supported_modalities is not None
+                        and modality not in supported_modalities
+                    ):
+                        self._error(
+                            HTTPStatus.UNPROCESSABLE_ENTITY,
+                            "unsupported_modality",
+                            _unsupported_modality_message(
+                                modality,
+                                supported_modalities,
+                            ),
+                            error_details={
+                                "modality": modality,
+                                "supported_modalities": list(supported_modalities),
+                                "target_profile": target_profile,
+                            },
+                        )
+                        return
+                    self._evaluate_submission(payload, images)
+            except GUIShuttingDownError:
                 self._error(
                     HTTPStatus.SERVICE_UNAVAILABLE,
-                    "shutdown_unavailable",
-                    "GUI shutdown requires a configured API bearer token.",
+                    "shutting_down",
+                    "The dashboard is shutting down and cannot accept evaluations.",
                 )
-                return
+            except GUITargetChangingError:
+                self._error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "target_change_in_progress",
+                    "The active detector target is changing; retry when it is ready.",
+                )
+
+        def _shutdown(self) -> None:
             authorization = self.headers.get("Authorization", "")
-            expected = f"Bearer {shutdown_token}"
-            if not hmac.compare_digest(authorization, expected):
+            if not (
+                authorization.startswith("Bearer ")
+                and secret_matches(authorization[7:], shutdown_token)
+            ):
                 self._error(
                     HTTPStatus.UNAUTHORIZED,
                     "unauthorized",
@@ -597,21 +904,7 @@ def _gui_handler_class(
                     "Stopping the GUI requires explicit confirmation.",
                 )
                 return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                length = -1
-            if length != 0:
-                self._error(
-                    HTTPStatus.BAD_REQUEST,
-                    "invalid_request",
-                    "POST /api/shutdown does not accept a request body.",
-                )
-                return
-
-            with shutdown_lock:
-                already_requested = shutdown_state["requested"]
-                shutdown_state["requested"] = True
+            already_requested = lifecycle.begin()
             self._send_json(
                 {
                     "shutting_down": True,
@@ -623,7 +916,7 @@ def _gui_handler_class(
                 return
 
             def finish_shutdown() -> None:
-                history_activity.wait_until_idle()
+                lifecycle.begin_and_wait()
                 self.server.shutdown()
 
             Thread(
@@ -633,6 +926,11 @@ def _gui_handler_class(
             ).start()
 
         def do_PUT(self) -> None:
+            parsed = urlsplit(self.path)
+            body_required = parsed.path == "/api/settings" and not parsed.query
+            length = self._request_content_length(body_required=body_required)
+            if length is None:
+                return
             if not self._trusted_host():
                 self._error(
                     HTTPStatus.FORBIDDEN,
@@ -640,7 +938,8 @@ def _gui_handler_class(
                     "The dashboard is available only through a loopback address.",
                 )
                 return
-            parsed = urlsplit(self.path)
+            if parsed.path.startswith("/api/") and not self._authorized_session():
+                return
             if parsed.path != "/api/settings" or parsed.query:
                 self._error(
                     HTTPStatus.NOT_FOUND,
@@ -655,7 +954,14 @@ def _gui_handler_class(
                     "A same-origin request is required to change service settings.",
                 )
                 return
-            payload = self._read_settings_payload()
+            if lifecycle.requested:
+                self._error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "shutting_down",
+                    "The dashboard is shutting down and cannot change targets.",
+                )
+                return
+            payload = self._read_settings_payload(length)
             if payload is None:
                 return
 
@@ -685,13 +991,17 @@ def _gui_handler_class(
                 return
 
             service_status = upstream.status()
-            if not _authenticated_runtime_control(service_status):
+            if not _authenticated_runtime_control(
+                service_status,
+                admin_token_configured=runtime_admin_token_configured,
+            ):
                 self._error(
                     HTTPStatus.FORBIDDEN,
                     "runtime_control_unavailable",
                     (
                         "Runtime settings require a running AEGIS service and a "
-                        "matching API bearer token in the GUI process."
+                        "matching API bearer token; applying changes also requires "
+                        "the distinct matching admin bearer token in the GUI process."
                     ),
                 )
                 return
@@ -703,11 +1013,19 @@ def _gui_handler_class(
                 else None
             )
             try:
-                operation = target_controller.switch(
-                    target_profile,
-                    previous_target,
-                    traffic_mode,
-                )
+                if previous_target == target_profile:
+                    operation = target_controller.switch(
+                        target_profile,
+                        previous_target,
+                        traffic_mode,
+                    )
+                else:
+                    with history_activity.target_change():
+                        operation = target_controller.switch(
+                            target_profile,
+                            previous_target,
+                            traffic_mode,
+                        )
             except GUIControlBusyError as exc:
                 self._error(
                     HTTPStatus.CONFLICT,
@@ -738,6 +1056,13 @@ def _gui_handler_class(
                 )
                 self._error(status, exc.code, str(exc))
                 return
+            except GUIShuttingDownError:
+                self._error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "shutting_down",
+                    "The dashboard is shutting down and cannot change targets.",
+                )
+                return
 
             with settings_lock:
                 traffic_mode_preferences[target_profile] = traffic_mode
@@ -746,6 +1071,8 @@ def _gui_handler_class(
             self._send_json(response, status=HTTPStatus.OK)
 
         def do_DELETE(self) -> None:
+            if self._request_content_length(body_required=False) is None:
+                return
             if not self._trusted_host():
                 self._error(
                     HTTPStatus.FORBIDDEN,
@@ -754,6 +1081,8 @@ def _gui_handler_class(
                 )
                 return
             parsed = urlsplit(self.path)
+            if parsed.path.startswith("/api/") and not self._authorized_session():
+                return
             if parsed.path != "/api/history" or parsed.query:
                 self._error(
                     HTTPStatus.NOT_FOUND,
@@ -776,18 +1105,14 @@ def _gui_handler_class(
                 )
                 return
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                length = -1
-            if length != 0:
+                cleared = history_activity.clear(history.clear_all)
+            except GUIShuttingDownError:
                 self._error(
-                    HTTPStatus.BAD_REQUEST,
-                    "invalid_request",
-                    "DELETE /api/history does not accept a request body.",
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "shutting_down",
+                    "The dashboard is shutting down and cannot clear history.",
                 )
                 return
-            try:
-                cleared = history_activity.clear(history.clear_all)
             except (OSError, sqlite3.Error, ValueError):
                 self._error(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -815,6 +1140,13 @@ def _gui_handler_class(
                     metadata=dict(payload.get("metadata", {})),
                     images=images,
                 )
+            except GUIHistoryRetentionError as exc:
+                self._error(
+                    HTTPStatus.TOO_MANY_REQUESTS,
+                    "history_capacity",
+                    str(exc),
+                )
+                return
             except (OSError, sqlite3.Error, ValueError):
                 self._error(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -941,10 +1273,17 @@ def _gui_handler_class(
                     "target_profile": active_target,
                     "traffic_mode": traffic_mode,
                     "model_id": readiness.get("model_id"),
+                    "detector_mode": readiness.get("detector_mode", "single"),
+                    "detector_identity_sha256": readiness.get(
+                        "detector_identity_sha256", readiness.get("detector_sha256")
+                    ),
                     "ready": bool(service_status.get("ready")),
                     "connected": bool(service_status.get("connected")),
                     "runtime_traffic_mode_control": (
-                        _authenticated_runtime_control(service_status)
+                        _authenticated_runtime_control(
+                            service_status,
+                            admin_token_configured=runtime_admin_token_configured,
+                        )
                     ),
                 },
                 "targets": targets,
@@ -952,24 +1291,13 @@ def _gui_handler_class(
                 "target_control": target_control,
             }
 
-        def _read_settings_payload(self) -> dict[str, Any] | None:
+        def _read_settings_payload(self, length: int) -> dict[str, Any] | None:
             content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip()
             if content_type != "application/json":
                 self._error(
                     HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
                     "unsupported_media_type",
                     "Content-Type must be application/json.",
-                )
-                return None
-            try:
-                length = int(self.headers.get("Content-Length", ""))
-            except ValueError:
-                length = -1
-            if length <= 0:
-                self._error(
-                    HTTPStatus.LENGTH_REQUIRED,
-                    "content_length_required",
-                    "A positive Content-Length is required.",
                 )
                 return None
             if length > 32 * 1024:
@@ -979,9 +1307,12 @@ def _gui_handler_class(
                     "The settings request is too large.",
                 )
                 return None
+            encoded_body = self._read_request_body(length)
+            if encoded_body is None:
+                return None
             try:
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+                payload = strict_json_loads(encoded_body.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
                 self._error(
                     HTTPStatus.BAD_REQUEST,
                     "invalid_settings",
@@ -1129,6 +1460,20 @@ def _gui_handler_class(
                 return False
             return hostname is not None and _is_loopback_host(hostname)
 
+        def _authorized_session(self) -> bool:
+            candidates = self.headers.get_all(_GUI_SESSION_HEADER, [])
+            if (
+                len(candidates) == 1
+                and secret_matches(candidates[0], session_token)
+            ):
+                return True
+            self._error(
+                HTTPStatus.UNAUTHORIZED,
+                "gui_session_required",
+                "A valid per-launch GUI session header is required.",
+            )
+            return False
+
         def _error(
             self,
             status: HTTPStatus,
@@ -1166,16 +1511,73 @@ def _gui_handler_class(
             content_type: str,
             extra_headers: dict[str, str] | None = None,
         ) -> None:
-            self.send_response(int(status))
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            for name, value in _SECURITY_HEADERS.items():
-                self.send_header(name, value)
-            for name, value in (extra_headers or {}).items():
-                self.send_header(name, value)
-            self.end_headers()
-            self.wfile.write(body)
+            self._finish_request_read()
+            try:
+                self.send_response(int(status))
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                for name, value in _SECURITY_HEADERS.items():
+                    self.send_header(name, value)
+                for name, value in (extra_headers or {}).items():
+                    self.send_header(name, value)
+                self.end_headers()
+                self.wfile.write(body)
+            except (OSError, socket.timeout):
+                self.close_connection = True
+
+        def _request_content_length(self, *, body_required: bool) -> int | None:
+            try:
+                return parse_request_content_length(
+                    self.headers,
+                    body_required=body_required,
+                )
+            except RequestFramingError as exc:
+                self.close_connection = True
+                length_required = body_required and exc.reason in {
+                    "missing_content_length",
+                    "invalid_content_length",
+                    "body_required",
+                }
+                self._error(
+                    (
+                        HTTPStatus.LENGTH_REQUIRED
+                        if length_required
+                        else HTTPStatus.BAD_REQUEST
+                    ),
+                    (
+                        "content_length_required"
+                        if length_required
+                        else "invalid_request"
+                    ),
+                    str(exc),
+                )
+                return None
+
+        def _read_request_body(self, length: int) -> bytes | None:
+            try:
+                body = self.rfile.read(length)
+            except (OSError, TimeoutError, socket.timeout):
+                self._finish_request_read()
+                self._error(
+                    HTTPStatus.REQUEST_TIMEOUT,
+                    "request_timeout",
+                    "The request body was not received within the configured timeout.",
+                )
+                return None
+            expired = self._finish_request_read()
+            if expired or len(body) != length:
+                self._error(
+                    HTTPStatus.REQUEST_TIMEOUT,
+                    "request_timeout",
+                    "The request body was not received within the configured timeout.",
+                )
+                return None
+            return body
+
+        def _finish_request_read(self) -> bool:
+            finish = getattr(self.server, "finish_request_read", None)
+            return bool(finish(self.connection)) if callable(finish) else False
 
     return Handler
 
@@ -1233,12 +1635,17 @@ def _submission_modality(payload: dict[str, Any]) -> str:
     return "text"
 
 
-def _authenticated_runtime_control(service_status: object) -> bool:
+def _authenticated_runtime_control(
+    service_status: object,
+    *,
+    admin_token_configured: bool,
+) -> bool:
     if not isinstance(service_status, dict):
         return False
     capabilities = service_status.get("capabilities")
     return bool(
-        isinstance(capabilities, dict)
+        admin_token_configured
+        and isinstance(capabilities, dict)
         and capabilities.get("runtime_traffic_mode_control") is True
         and isinstance(service_status.get("metrics"), dict)
         and service_status.get("metrics_error") is None
@@ -1403,13 +1810,37 @@ def _validate_service_url(value: str) -> str:
 
 
 def _is_loopback_host(host: str) -> bool:
-    normalized = str(host).strip().lower()
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return False
+    return is_loopback_hostname(host)
+
+
+def _credential_target(readiness: object) -> str:
+    if not isinstance(readiness, dict) or readiness.get("ok") is not True:
+        raise UpstreamGuardrailError(
+            "The local AEGIS bearer was not sent because the expected target is not ready.",
+            code="credential_owner_unverified",
+            status=HTTPStatus.BAD_GATEWAY,
+        )
+    target = readiness.get("target_profile")
+    if target not in {"llava05b", "qwen25vl3b"}:
+        raise UpstreamGuardrailError(
+            "The local AEGIS bearer was not sent because the expected target is invalid.",
+            code="credential_owner_unverified",
+            status=HTTPStatus.BAD_GATEWAY,
+        )
+    return str(target)
+
+
+def _require_positive_int(value: object, name: str) -> None:
+    if type(value) is not int or value <= 0:
+        raise ValueError(f"{name} must be a positive integer.")
+
+
+def _require_positive_finite(value: object, name: str) -> None:
+    if type(value) not in {int, float}:
+        raise ValueError(f"{name} must be positive and finite.")
+    normalized = float(value)
+    if not math.isfinite(normalized) or normalized <= 0:
+        raise ValueError(f"{name} must be positive and finite.")
 
 
 def _upstream_http_error(
@@ -1421,7 +1852,7 @@ def _upstream_http_error(
     message = f"AEGIS returned HTTP {status}."
     if content_type == "application/json" and len(body) <= _MAX_UPSTREAM_RESPONSE_BYTES:
         try:
-            payload = json.loads(body.decode("utf-8"))
+            payload = strict_json_loads(body.decode("utf-8"))
             error = payload.get("error") if isinstance(payload, dict) else None
             if isinstance(error, dict):
                 raw_code = error.get("code")
@@ -1430,7 +1861,7 @@ def _upstream_http_error(
                     code = raw_code
                 if isinstance(raw_message, str) and raw_message:
                     message = raw_message
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, ValueError):
             pass
     return UpstreamGuardrailError(message, code=code, status=status)
 

@@ -3,16 +3,16 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-import ipaddress
 import json
 import math
 from typing import Any, TypeVar
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import build_opener, HTTPRedirectHandler, Request
 import uuid
 
 from AEGIS.audit import validate_traffic_mode
+from AEGIS.http_transport import is_loopback_hostname, request_with_deadline
+from AEGIS.service import validate_request_payload_schema
+from AEGIS.strict_json import strict_json_loads
 
 
 _ACTIONS = {"allow", "review", "block"}
@@ -20,14 +20,6 @@ _VERDICTS = {"benign", "malicious", "guardrail_error"}
 _MAX_REQUEST_BYTES = 16 * 1024 * 1024
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 _T = TypeVar("_T")
-
-
-class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-_URL_OPENER = build_opener(_NoRedirectHandler())
 
 
 class GuardrailClientError(RuntimeError):
@@ -142,7 +134,7 @@ class GuardedRequest:
         return bytes(self._encoded_json)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = json.loads(self._encoded_json)
+        payload = strict_json_loads(self._encoded_json)
         if not isinstance(payload, dict):  # Guaranteed by construction.
             raise GuardrailProtocolError("Guarded request snapshot is invalid.")
         return payload
@@ -184,8 +176,13 @@ class GuardrailClient:
                 allow_unsafe_remote_http_for_development
             ),
         )
-        if timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be positive.")
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(float(timeout_seconds))
+            or float(timeout_seconds) <= 0
+        ):
+            raise ValueError("timeout_seconds must be positive and finite.")
         self._api_token = None if api_token is None else str(api_token)
         if self._api_token is not None and any(
             character in self._api_token for character in ("\r", "\n")
@@ -229,41 +226,33 @@ class GuardrailClient:
         }
         if self._api_token is not None:
             headers["Authorization"] = f"Bearer {self._api_token}"
-        request = Request(
-            f"{self._base_url}/v1/guard",
-            data=payload,
-            headers=headers,
-            method="POST",
-        )
         try:
-            with _URL_OPENER.open(request, timeout=self._timeout_seconds) as response:
-                status = int(response.status)
-                content_type = response.headers.get_content_type()
-                response_trace_id = response.headers.get("X-Request-ID")
-                body = response.read(_MAX_RESPONSE_BYTES + 1)
-        except HTTPError as exc:
-            status = int(exc.code)
-            try:
-                exc.read(_MAX_RESPONSE_BYTES + 1)
-            finally:
-                exc.close()
-            if status in {401, 403}:
-                raise GuardrailAuthenticationError(
-                    "AEGIS authentication failed; downstream inference was not invoked.",
-                    status=status,
-                ) from None
-            raise GuardrailServiceError(
-                "AEGIS returned a non-success status; downstream inference was not invoked.",
-                status=status,
-            ) from None
-        except (OSError, TimeoutError, URLError, ValueError):
+            response = request_with_deadline(
+                self._base_url,
+                "/v1/guard",
+                method="POST",
+                headers=headers,
+                data=payload,
+                timeout_seconds=self._timeout_seconds,
+                max_response_bytes=_MAX_RESPONSE_BYTES,
+            )
+            status = response.status
+            content_type = response.headers.get_content_type()
+            response_trace_id = response.headers.get("X-Request-ID")
+            body = response.body
+        except (OSError, TimeoutError, ValueError):
             raise GuardrailTransportError(
                 "AEGIS could not be reached; downstream inference was not invoked."
             ) from None
 
+        if status in {401, 403}:
+            raise GuardrailAuthenticationError(
+                "AEGIS authentication failed; downstream inference was not invoked.",
+                status=status,
+            )
         if status != 200:
             raise GuardrailServiceError(
-                "AEGIS returned an unexpected status; downstream inference was not invoked.",
+                "AEGIS returned a non-success status; downstream inference was not invoked.",
                 status=status,
             )
         if content_type != "application/json" or len(body) > _MAX_RESPONSE_BYTES:
@@ -271,8 +260,8 @@ class GuardrailClient:
                 "AEGIS returned an invalid response; downstream inference was not invoked."
             )
         try:
-            response_payload = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            response_payload = strict_json_loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
             raise GuardrailProtocolError(
                 "AEGIS returned an invalid response; downstream inference was not invoked."
             ) from None
@@ -307,6 +296,7 @@ class GuardrailClient:
                 "inference was not invoked."
             )
         encoded, expected_decisions = _encode_request(request_payload)
+        _validate_guarded_call_snapshot(encoded)
         result = self._guard_encoded(
             encoded,
             expected_decisions=expected_decisions,
@@ -350,7 +340,7 @@ def _validate_base_url(
         )
     if (
         parsed.scheme == "http"
-        and not _is_loopback_hostname(hostname)
+        and not is_loopback_hostname(hostname)
         and not allow_unsafe_remote_http_for_development
     ):
         raise ValueError(
@@ -362,31 +352,15 @@ def _validate_base_url(
 
 
 def _is_loopback_hostname(hostname: str) -> bool:
-    normalized = hostname.lower()
-    if normalized == "localhost":
-        return True
-    try:
-        address = ipaddress.ip_address(normalized)
-    except ValueError:
-        return False
-    if isinstance(address, ipaddress.IPv4Address):
-        return address.is_loopback
-    return address == ipaddress.IPv6Address("::1")
+    """Backward-compatible private alias for callers that imported it."""
+
+    return is_loopback_hostname(hostname)
 
 
 def _encode_request(payload: Mapping[str, Any]) -> tuple[bytes, int]:
     if not isinstance(payload, Mapping):
         raise GuardrailRequestError(
             "AEGIS request must be a JSON object; downstream inference was not invoked."
-        )
-    requests = payload.get("requests")
-    if requests is None:
-        expected_decisions = 1
-    elif isinstance(requests, list) and requests:
-        expected_decisions = len(requests)
-    else:
-        raise GuardrailRequestError(
-            "AEGIS batch request is invalid; downstream inference was not invoked."
         )
     try:
         encoded = json.dumps(
@@ -398,12 +372,42 @@ def _encode_request(payload: Mapping[str, Any]) -> tuple[bytes, int]:
         raise GuardrailRequestError(
             "AEGIS request is not JSON serializable; downstream inference was not invoked."
         ) from None
+    try:
+        validated_payload = strict_json_loads(encoded)
+        expected_decisions = len(validate_request_payload_schema(validated_payload))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise GuardrailRequestError(
+            f"AEGIS request schema is invalid: {exc} Downstream inference was not invoked."
+        ) from None
     if len(encoded) > _MAX_REQUEST_BYTES:
         raise GuardrailRequestError(
             "AEGIS request exceeds the client size limit; downstream inference was not "
             "invoked."
         )
     return encoded, expected_decisions
+
+
+def _validate_guarded_call_snapshot(encoded: bytes) -> None:
+    """Reject fields that AEGIS does not score or cannot snapshot by value."""
+
+    payload = strict_json_loads(encoded)
+    request_payloads = payload.get("requests")
+    requests = request_payloads if request_payloads is not None else [payload]
+    for index, request in enumerate(requests, start=1):
+        unevaluated_fields = sorted({"metadata", "request_id"} & set(request))
+        if unevaluated_fields:
+            raise GuardrailRequestError(
+                f"AEGIS guarded_call request {index} must not contain unevaluated "
+                f"fields {unevaluated_fields} because they are not detector input; "
+                "downstream inference was not invoked."
+            )
+        path_fields = sorted({"image_path", "image_paths"} & set(request))
+        if path_fields:
+            raise GuardrailRequestError(
+                f"AEGIS guarded_call request {index} must snapshot images as encoded "
+                f"bytes, not mutable local-path fields {path_fields}; downstream "
+                "inference was not invoked."
+            )
 
 
 def _validate_response(

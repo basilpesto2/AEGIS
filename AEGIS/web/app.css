@@ -1451,6 +1451,25 @@ select:focus {
   font-size: 10px;
 }
 
+.head-decision-panel {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.head-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.65rem;
+}
+
+.head-decision-card {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+
 .chip-list {
   display: flex;
   flex-wrap: wrap;

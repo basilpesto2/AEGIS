@@ -1,6 +1,9 @@
 .git
 .env
 .venv
+/FYP Report/
+/deliverables/
+/tmp/
 __pycache__
 **/__pycache__
 *.pyc

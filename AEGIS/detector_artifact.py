@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import io
 from pathlib import Path
 
 import numpy as np
@@ -114,7 +116,20 @@ def load_detector_artifact(path: str | Path) -> DetectorArtifact:
     artifact_path = Path(path)
     if not artifact_path.exists():
         raise FileNotFoundError(f"Detector artifact does not exist: {artifact_path}")
-    with np.load(artifact_path, allow_pickle=False) as data:
+    artifact, _ = load_detector_artifact_snapshot(artifact_path)
+    return artifact
+
+
+def load_detector_artifact_snapshot(
+    path: str | Path,
+) -> tuple[DetectorArtifact, str]:
+    """Load and identify one immutable byte snapshot of an artifact file."""
+    artifact_path = Path(path)
+    if not artifact_path.exists():
+        raise FileNotFoundError(f"Detector artifact does not exist: {artifact_path}")
+    payload = artifact_path.read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
+    with np.load(io.BytesIO(payload), allow_pickle=False) as data:
         version = _scalar_int(data, "artifact_version")
         if version != ARTIFACT_VERSION:
             raise ValueError(
@@ -131,7 +146,7 @@ def load_detector_artifact(path: str | Path) -> DetectorArtifact:
         classifier.bias_ = _scalar_float(data, "bias")
         classifier.mean_ = np.asarray(data["mean"], dtype=np.float64)
         classifier.scale_ = np.asarray(data["scale"], dtype=np.float64)
-        return DetectorArtifact(
+        artifact = DetectorArtifact(
             classifier=classifier,
             threshold=_scalar_float(data, "threshold"),
             uncertainty_margin=_scalar_float(data, "uncertainty_margin"),
@@ -144,6 +159,7 @@ def load_detector_artifact(path: str | Path) -> DetectorArtifact:
             tokenizer_revision=_optional_scalar_string(data, "tokenizer_revision"),
             preprocessing_sha256=_optional_scalar_string(data, "preprocessing_sha256"),
         )
+    return artifact, digest
 
 
 def infer_embedding_provenance(path: str | Path) -> dict[str, object]:

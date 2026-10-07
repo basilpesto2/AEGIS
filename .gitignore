@@ -10,6 +10,8 @@ dist/
 
 models/huggingface/
 outputs/
+/tmp/
 deliverables/**/runs/
 
 /FYP Report/
+/manual_demo/aegis_v7_unseen_four_way_2026-09-21/

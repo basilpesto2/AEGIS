@@ -17,10 +17,19 @@ import uuid
 _SCHEMA_VERSION = 1
 _MAX_PAGE_SIZE = 100
 _BUSY_TIMEOUT_MS = 10_000
+_DEFAULT_MAX_RECORDS = 1_000
+_DEFAULT_MAX_AGE_DAYS = 30.0
+_DEFAULT_MAX_BYTES = 256 * 1024 * 1024
 _STATUSES = frozenset({"pending", "completed", "error"})
 _ACTIONS = frozenset({"allow", "review", "block"})
 _VERDICTS = frozenset({"benign", "malicious", "guardrail_error", "unknown"})
 _MODALITIES = frozenset({"text", "image", "image_text"})
+_INTERRUPTED_ERROR = {
+    "error": {
+        "code": "gui_interrupted",
+        "message": "The evaluation was interrupted when the GUI process stopped.",
+    }
+}
 
 
 @dataclass(frozen=True)
@@ -28,6 +37,10 @@ class StoredImage:
     filename: str
     media_type: str
     content: bytes
+
+
+class GUIHistoryRetentionError(RuntimeError):
+    """The configured retention budget cannot admit another active record."""
 
 
 class GUIHistoryStore:
@@ -38,10 +51,39 @@ class GUIHistoryStore:
     permits readers to continue during short writes.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        max_records: int = _DEFAULT_MAX_RECORDS,
+        max_age_days: float = _DEFAULT_MAX_AGE_DAYS,
+        max_bytes: int = _DEFAULT_MAX_BYTES,
+    ) -> None:
         if str(path) == ":memory:":
             raise ValueError("GUI history must use a persistent filesystem path.")
+        if (
+            isinstance(max_records, bool)
+            or not isinstance(max_records, int)
+            or max_records <= 0
+        ):
+            raise ValueError("GUI history max_records must be positive.")
+        if (
+            isinstance(max_age_days, bool)
+            or not isinstance(max_age_days, (int, float))
+            or not math.isfinite(float(max_age_days))
+            or float(max_age_days) <= 0
+        ):
+            raise ValueError("GUI history max_age_days must be positive and finite.")
+        if (
+            isinstance(max_bytes, bool)
+            or not isinstance(max_bytes, int)
+            or max_bytes <= 0
+        ):
+            raise ValueError("GUI history max_bytes must be positive.")
         self.path = Path(path).expanduser().resolve()
+        self.max_records = int(max_records)
+        self.max_age_days = float(max_age_days)
+        self.max_bytes = int(max_bytes)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -137,6 +179,18 @@ class GUIHistoryStore:
                     for position, image in enumerate(normalized_images)
                 ],
             )
+            retained = self._enforce_retention_locked(
+                connection,
+                keep_record_id=record_id,
+            )
+            if (
+                retained["records"] > self.max_records
+                or retained["bytes"] > self.max_bytes
+            ):
+                raise GUIHistoryRetentionError(
+                    "GUI history retention limits are occupied by active requests; "
+                    "retry after they finish."
+                )
         return record_id
 
     def complete(
@@ -197,6 +251,12 @@ class GUIHistoryStore:
                 ),
             )
             self._require_pending_transition(connection, cursor, str(record_id))
+            retained = self._enforce_retention_locked(
+                connection,
+                keep_record_id=str(record_id),
+            )
+            if retained["records"] > self.max_records or retained["bytes"] > self.max_bytes:
+                self._enforce_retention_locked(connection)
 
     def fail(
         self,
@@ -238,6 +298,12 @@ class GUIHistoryStore:
                 ),
             )
             self._require_pending_transition(connection, cursor, str(record_id))
+            retained = self._enforce_retention_locked(
+                connection,
+                keep_record_id=str(record_id),
+            )
+            if retained["records"] > self.max_records or retained["bytes"] > self.max_bytes:
+                self._enforce_retention_locked(connection)
 
     def search(
         self,
@@ -311,7 +377,8 @@ class GUIHistoryStore:
 
         where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
         with self._connection() as connection:
-            connection.execute("BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
+            self._delete_expired_locked(connection)
             total_row = connection.execute(
                 "SELECT COUNT(*) AS total FROM gui_history AS h" + where_sql,
                 parameters,
@@ -361,7 +428,8 @@ class GUIHistoryStore:
         """Return aggregate dashboard counts without exposing request content."""
 
         with self._connection() as connection:
-            connection.execute("BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
+            self._delete_expired_locked(connection)
             aggregate = connection.execute(
                 """
                 SELECT
@@ -380,6 +448,7 @@ class GUIHistoryStore:
             )
             verdict_counts = _grouped_counts(connection, "verdict")
             modality_counts = _grouped_counts(connection, "modality")
+            logical_bytes = _logical_storage_bytes(connection)
 
         return {
             "total": int(aggregate["total"]) if aggregate is not None else 0,
@@ -395,6 +464,12 @@ class GUIHistoryStore:
                 None if aggregate is None else aggregate["average_duration_ms"]
             ),
             "latest_at": None if aggregate is None else aggregate["latest_at"],
+            "retention": {
+                "max_records": self.max_records,
+                "max_age_days": self.max_age_days,
+                "max_bytes": self.max_bytes,
+                "logical_bytes": logical_bytes,
+            },
         }
 
     def get(self, record_id: str) -> dict[str, object] | None:
@@ -402,6 +477,8 @@ class GUIHistoryStore:
 
         normalized_id = str(record_id)
         with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._delete_expired_locked(connection)
             row = connection.execute(
                 """
                 SELECT
@@ -473,6 +550,8 @@ class GUIHistoryStore:
         if normalized_position < 0:
             return None
         with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._delete_expired_locked(connection)
             row = connection.execute(
                 """
                 SELECT filename, media_type, content
@@ -490,7 +569,7 @@ class GUIHistoryStore:
         )
 
     def clear_all(self) -> dict[str, int]:
-        """Delete every history record and its stored images atomically."""
+        """Secure-delete all records, truncate the WAL, and compact the database."""
 
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -502,6 +581,8 @@ class GUIHistoryStore:
             ).fetchone()
             connection.execute("DELETE FROM gui_history")
 
+        self._compact_after_clear()
+
         return {
             "deleted_records": int(record_row["total"]) if record_row is not None else 0,
             "deleted_images": int(image_row["total"]) if image_row is not None else 0,
@@ -509,9 +590,11 @@ class GUIHistoryStore:
 
     def _initialize(self) -> None:
         connection = sqlite3.connect(str(self.path), timeout=10.0)
+        connection.row_factory = sqlite3.Row
         try:
             connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
             connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA secure_delete = ON")
             mode_row = connection.execute("PRAGMA journal_mode = WAL").fetchone()
             if mode_row is None or str(mode_row[0]).lower() != "wal":
                 raise RuntimeError("SQLite could not enable WAL mode for GUI history.")
@@ -575,10 +658,38 @@ class GUIHistoryStore:
                 """
             )
             connection.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+            connection.execute("BEGIN IMMEDIATE")
+            self._recover_interrupted_locked(connection)
+            self._enforce_retention_locked(connection)
             connection.commit()
         finally:
             connection.close()
             self._harden_permissions()
+
+    @staticmethod
+    def _recover_interrupted_locked(connection: sqlite3.Connection) -> int:
+        """Make pending rows from a previous process eligible for retention."""
+
+        timestamp = _utc_now()
+        cursor = connection.execute(
+            """
+            UPDATE gui_history
+            SET
+                updated_at = ?,
+                finished_at = ?,
+                status = 'error',
+                response_json = NULL,
+                error_json = ?,
+                duration_ms = NULL
+            WHERE status = 'pending'
+            """,
+            (
+                timestamp,
+                timestamp,
+                _dump_json_object(_INTERRUPTED_ERROR, "interrupted error"),
+            ),
+        )
+        return max(0, int(cursor.rowcount))
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -586,12 +697,89 @@ class GUIHistoryStore:
         connection.row_factory = sqlite3.Row
         connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA secure_delete = ON")
         try:
             yield connection
             connection.commit()
         except BaseException:
             connection.rollback()
             raise
+        finally:
+            connection.close()
+            self._harden_permissions()
+
+    def _enforce_retention_locked(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        keep_record_id: str | None = None,
+    ) -> dict[str, int]:
+        cutoff = _format_utc(
+            datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
+        )
+        rows = connection.execute(
+            """
+            SELECT
+                h.record_id,
+                h.created_at,
+                h.status,
+                (
+                    LENGTH(CAST(h.text AS BLOB))
+                    + LENGTH(CAST(h.input_json AS BLOB))
+                    + COALESCE(LENGTH(CAST(h.response_json AS BLOB)), 0)
+                    + COALESCE(LENGTH(CAST(h.error_json AS BLOB)), 0)
+                    + COALESCE(SUM(image.byte_size), 0)
+                ) AS logical_bytes
+            FROM gui_history AS h
+            LEFT JOIN gui_history_images AS image
+                ON image.record_id = h.record_id
+            GROUP BY h.record_id
+            ORDER BY h.created_at DESC, h.record_id DESC
+            """
+        ).fetchall()
+        retained_records = 0
+        retained_bytes = 0
+        delete_ids: list[str] = []
+        for row in rows:
+            record_id = str(row["record_id"])
+            record_bytes = int(row["logical_bytes"] or 0)
+            expired = str(row["created_at"]) < cutoff
+            # Pending rows belong to an active evaluation in this process and must
+            # survive every age/count/byte prune until complete() or fail(). Startup
+            # recovery converts abandoned pending rows before retention runs.
+            protected = record_id == keep_record_id or str(row["status"]) == "pending"
+            exceeds_count = retained_records + 1 > self.max_records
+            exceeds_bytes = retained_bytes + record_bytes > self.max_bytes
+            if not protected and (expired or exceeds_count or exceeds_bytes):
+                delete_ids.append(record_id)
+                continue
+            retained_records += 1
+            retained_bytes += record_bytes
+        if delete_ids:
+            connection.executemany(
+                "DELETE FROM gui_history WHERE record_id = ?",
+                [(record_id,) for record_id in delete_ids],
+            )
+        return {"records": retained_records, "bytes": retained_bytes}
+
+    def _delete_expired_locked(self, connection: sqlite3.Connection) -> int:
+        cutoff = _format_utc(
+            datetime.now(timezone.utc) - timedelta(days=self.max_age_days)
+        )
+        cursor = connection.execute(
+            "DELETE FROM gui_history WHERE created_at < ? AND status <> 'pending'",
+            (cutoff,),
+        )
+        return max(0, int(cursor.rowcount))
+
+    def _compact_after_clear(self) -> None:
+        connection = sqlite3.connect(str(self.path), timeout=10.0, isolation_level=None)
+        try:
+            connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
+            connection.execute("PRAGMA secure_delete = ON")
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            connection.execute("VACUUM")
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         finally:
             connection.close()
             self._harden_permissions()
@@ -842,6 +1030,29 @@ def _grouped_counts(
         """
     ).fetchall()
     return {str(row["value"]): int(row["count"]) for row in rows}
+
+
+def _logical_storage_bytes(connection: sqlite3.Connection) -> int:
+    row = connection.execute(
+        """
+        SELECT
+            COALESCE(
+                SUM(
+                    LENGTH(CAST(text AS BLOB))
+                    + LENGTH(CAST(input_json AS BLOB))
+                    + COALESCE(LENGTH(CAST(response_json AS BLOB)), 0)
+                    + COALESCE(LENGTH(CAST(error_json AS BLOB)), 0)
+                ),
+                0
+            )
+            + COALESCE(
+                (SELECT SUM(byte_size) FROM gui_history_images),
+                0
+            ) AS total
+        FROM gui_history
+        """
+    ).fetchone()
+    return 0 if row is None else int(row["total"] or 0)
 
 
 def _list_item(row: sqlite3.Row) -> dict[str, object]:

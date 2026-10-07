@@ -20,6 +20,10 @@ DEMO_WARNING = (
 class DemoEmbeddingProvider:
     model_family = "generic"
     model_id = "aegis/functional-demo-v1"
+    layer = -1
+    model_revision = ""
+    tokenizer_revision = ""
+    preprocessing_sha256 = ""
     pooling = "demo_features"
     feature_dim = 8
 

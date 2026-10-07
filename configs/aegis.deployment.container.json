@@ -3,18 +3,32 @@
   "traffic_mode": "shadow",
   "evidence_session_mode": "runtime",
   "audit": {
-    "path": "/var/lib/aegis/audit/aegis-qwen25vl3b-{evidence_session_id}.jsonl",
+    "path": "/var/lib/aegis/audit/aegis-qwen25vl3b.jsonl",
     "max_bytes": 104857600,
     "backup_count": 5,
     "fsync": false
   },
   "cache_dir": "/app/models/huggingface",
-  "detector": "models/aegis/aegis_qwen25vl3b_bordair_ocr_v6.npz",
+  "detector": {
+    "mode": "or",
+    "heads": [
+      {
+        "name": "text",
+        "artifact": "models/aegis/qwen25vl3b_v7_dual_or/qwen25vl3b_text_head_v1.npz",
+        "review_threshold": 0.9775257227486033
+      },
+      {
+        "name": "image",
+        "artifact": "models/aegis/qwen25vl3b_v7_dual_or/qwen25vl3b_image_head_v1.npz",
+        "review_threshold": 0.1490249723273814
+      }
+    ]
+  },
   "name": "aegis-qwen25vl3b-container",
   "policy": {
     "action_on_error": "review",
     "block_threshold": null,
-    "review_threshold": 0.34513525220153984,
+    "review_threshold": null,
     "hash_images": true,
     "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
     "require_matching_provenance": true,
@@ -26,13 +40,13 @@
     "device_map": "auto",
     "environment_overrides": false,
     "local_files_only": true,
-    "feature_dim": 2048,
+    "feature_dim": 4096,
     "layer": -1,
     "max_pixels": 200704,
     "min_pixels": null,
     "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
     "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
-    "pooling": "image_tokens",
+    "pooling": "text_image_tokens",
     "request_cache_max_entries": 128,
     "request_cache_ttl_seconds": 300.0,
     "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
@@ -63,15 +77,18 @@
     "min_model_cache_bytes": 6442450944,
     "min_total_physical_bytes": 16106127360
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "target_profile": "qwen25vl3b",
   "server": {
+    "admin_token_env": "AEGIS_ADMIN_TOKEN",
     "api_token_env": "AEGIS_API_TOKEN",
     "host": "0.0.0.0",
     "inference_timeout_seconds": 120.0,
     "max_body_bytes": 12582912,
     "max_concurrent_requests": 1,
+    "max_http_connections": 32,
     "port": 8766,
+    "request_read_timeout_seconds": 15.0,
     "worker_mode": "process",
     "worker_startup_timeout_seconds": 900.0
   },

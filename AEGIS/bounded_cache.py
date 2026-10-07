@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
+import math
 from threading import RLock
 import time
 from typing import Generic, TypeVar
@@ -24,10 +25,15 @@ class BoundedTTLCache(Generic[T]):
     """Small thread-safe LRU cache with a per-entry time-to-live."""
 
     def __init__(self, *, max_entries: int = 128, ttl_seconds: float = 300.0) -> None:
-        if max_entries <= 0:
+        if isinstance(max_entries, bool) or not isinstance(max_entries, int) or max_entries <= 0:
             raise ValueError("max_entries must be positive.")
-        if ttl_seconds <= 0.0:
-            raise ValueError("ttl_seconds must be positive.")
+        if (
+            isinstance(ttl_seconds, bool)
+            or not isinstance(ttl_seconds, (int, float))
+            or not math.isfinite(float(ttl_seconds))
+            or float(ttl_seconds) <= 0.0
+        ):
+            raise ValueError("ttl_seconds must be positive and finite.")
         self.max_entries = int(max_entries)
         self.ttl_seconds = float(ttl_seconds)
         self._entries: OrderedDict[str, tuple[float, T]] = OrderedDict()

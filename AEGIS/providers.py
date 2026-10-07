@@ -15,6 +15,11 @@ from AEGIS.bounded_cache import BoundedTTLCache
 from AEGIS.guardrail import GuardrailRequest
 from AEGIS.io import load_embeddings
 from AEGIS.provenance import preprocessing_fingerprint
+from AEGIS.provider_contract import FUSED_COMPONENT_POOLINGS, FUSED_TEXT_IMAGE_POOLING
+
+
+_FUSED_TEXT_IMAGE_POOLING = FUSED_TEXT_IMAGE_POOLING
+_FUSED_COMPONENT_POOLINGS = FUSED_COMPONENT_POOLINGS
 
 
 @dataclass
@@ -43,6 +48,9 @@ class Qwen25VLGuardrailProvider:
     _inference_lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        for name in ("cache_requests", "environment_overrides", "local_files_only"):
+            if not isinstance(getattr(self, name), bool):
+                raise ValueError(f"{name} must be a boolean.")
         if self.environment_overrides:
             self.model_id = os.getenv("AEGIS_QWEN_MODEL_ID", self.model_id)
             self.model_revision = os.getenv(
@@ -118,12 +126,12 @@ class Qwen25VLGuardrailProvider:
                         }
                     )
 
-                self._extract(
+                extracted = self._extract(
                     metadata_path=metadata_path,
                     output_path=output_path,
                     scratch=scratch,
                 )
-                features, _ = load_embeddings(output_path)
+                features = _load_extracted_features(extracted, self.pooling)
                 if features.shape[0] != 1:
                     raise ValueError(
                         f"Expected one embedded request, received {features.shape[0]}."
@@ -162,42 +170,52 @@ class Qwen25VLGuardrailProvider:
             digest.update(b"\0")
         for image_path in request.image_paths:
             path = Path(image_path)
-            digest.update(str(path.resolve()).encode("utf-8", errors="replace"))
-            digest.update(b"\0")
-            if path.exists():
-                stat = path.stat()
-                digest.update(str(stat.st_size).encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(str(stat.st_mtime_ns).encode("utf-8"))
-                digest.update(b"\0")
+            _update_digest_with_file(digest, path)
         return digest.hexdigest()
 
-    def _extract(self, metadata_path: Path, output_path: Path, scratch: Path) -> None:
+    def _extract(
+        self,
+        metadata_path: Path,
+        output_path: Path,
+        scratch: Path,
+    ) -> Path | dict[str, Path]:
         _quiet_transformers_progress()
         from AEGIS.adapters.qwen25_vl import (
             Qwen25VLExtractionConfig,
             extract_qwen25_vl_embeddings,
+            extract_qwen25_vl_pooling_embeddings,
         )
 
+        fused = self.pooling == _FUSED_TEXT_IMAGE_POOLING
         config = Qwen25VLExtractionConfig(
             model_id=self.model_id,
             model_revision=self.model_revision or None,
             tokenizer_revision=self.tokenizer_revision or None,
             cache_dir=self.cache_dir,
             layer=self.layer,
-            pooling=self.pooling,
+            pooling=_FUSED_COMPONENT_POOLINGS[0] if fused else self.pooling,
             torch_dtype=self.torch_dtype,
             device_map=self.device_map,
             min_pixels=self.min_pixels,
             max_pixels=self.max_pixels,
             local_files_only=self.local_files_only,
         )
+        if fused:
+            return extract_qwen25_vl_pooling_embeddings(
+                metadata_path=metadata_path,
+                corpus_root=scratch,
+                output_dir=scratch,
+                poolings=_FUSED_COMPONENT_POOLINGS,
+                config=config,
+                output_prefix="request",
+            )
         extract_qwen25_vl_embeddings(
             metadata_path=metadata_path,
             corpus_root=scratch,
             output_path=output_path,
             config=config,
         )
+        return output_path
 
 
 @dataclass
@@ -226,6 +244,9 @@ class LlavaOnevisionGuardrailProvider:
     _inference_lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        for name in ("cache_requests", "environment_overrides", "local_files_only"):
+            if not isinstance(getattr(self, name), bool):
+                raise ValueError(f"{name} must be a boolean.")
         if self.environment_overrides:
             self.model_id = os.getenv("AEGIS_LLAVA_MODEL_ID", self.model_id)
             self.model_revision = os.getenv(
@@ -301,8 +322,8 @@ class LlavaOnevisionGuardrailProvider:
                         }
                     )
 
-                output_path = self._extract(metadata_path=metadata_path, scratch=scratch)
-                features, _ = load_embeddings(output_path)
+                extracted = self._extract(metadata_path=metadata_path, scratch=scratch)
+                features = _load_extracted_features(extracted, self.pooling)
                 if features.shape[0] != 1:
                     raise ValueError(
                         f"Expected one embedded request, received {features.shape[0]}."
@@ -337,17 +358,14 @@ class LlavaOnevisionGuardrailProvider:
             digest.update(value.encode("utf-8"))
             digest.update(b"\0")
         path = Path(request.image_paths[0])
-        digest.update(str(path.resolve()).encode("utf-8", errors="replace"))
-        digest.update(b"\0")
-        if path.exists():
-            stat = path.stat()
-            digest.update(str(stat.st_size).encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(str(stat.st_mtime_ns).encode("utf-8"))
-            digest.update(b"\0")
+        _update_digest_with_file(digest, path)
         return digest.hexdigest()
 
-    def _extract(self, metadata_path: Path, scratch: Path) -> Path:
+    def _extract(
+        self,
+        metadata_path: Path,
+        scratch: Path,
+    ) -> Path | dict[str, Path]:
         _quiet_transformers_progress()
         from AEGIS.adapters.llava_onevision import (
             LlavaOnevisionExtractionConfig,
@@ -366,15 +384,83 @@ class LlavaOnevisionGuardrailProvider:
             max_image_edge=self.max_image_edge,
             local_files_only=self.local_files_only,
         )
+        fused = self.pooling == _FUSED_TEXT_IMAGE_POOLING
+        requested_poolings = (
+            _FUSED_COMPONENT_POOLINGS if fused else (self.pooling,)
+        )
         paths = extract_llava_onevision_pooling_embeddings(
             metadata_path=metadata_path,
             corpus_root=scratch,
             output_dir=scratch,
-            poolings=[self.pooling],
+            poolings=requested_poolings,
             config=config,
             output_prefix="request",
         )
+        if fused:
+            return paths
         return paths[self.pooling]
+
+
+def _load_extracted_features(
+    extracted: Path | dict[str, Path],
+    pooling: str,
+) -> np.ndarray:
+    if pooling != _FUSED_TEXT_IMAGE_POOLING:
+        if isinstance(extracted, dict):
+            try:
+                extracted = extracted[pooling]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Extractor did not return the requested {pooling!r} pooling."
+                ) from exc
+        features, _ = load_embeddings(extracted)
+        return features
+
+    if not isinstance(extracted, dict):
+        raise ValueError(
+            "Fused text_image_tokens extraction must return both pooling outputs."
+        )
+
+    components: list[np.ndarray] = []
+    expected_rows: int | None = None
+    for component_pooling in _FUSED_COMPONENT_POOLINGS:
+        try:
+            component_path = extracted[component_pooling]
+        except KeyError as exc:
+            raise ValueError(
+                "Fused text_image_tokens extraction did not return "
+                f"{component_pooling!r}."
+            ) from exc
+        component_features, _ = load_embeddings(component_path)
+        row_count = int(component_features.shape[0])
+        if expected_rows is None:
+            expected_rows = row_count
+        elif row_count != expected_rows:
+            raise ValueError(
+                "Fused text_image_tokens pooling row-count mismatch: "
+                f"expected {expected_rows}, received {row_count} for "
+                f"{component_pooling}."
+            )
+        components.append(component_features)
+
+    return np.concatenate(components, axis=1)
+
+
+def _update_digest_with_file(digest, path: Path) -> None:
+    """Add stable image content to a request key without using a temporary path."""
+
+    if not path.is_file():
+        raise FileNotFoundError(f"Image path does not exist or is not a file: {path}")
+    file_digest = hashlib.sha256()
+    size = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            size += len(chunk)
+            file_digest.update(chunk)
+    digest.update(str(size).encode("ascii"))
+    digest.update(b"\0")
+    digest.update(file_digest.digest())
+    digest.update(b"\0")
 
 
 def _optional_env_int(name: str, default: int | None) -> int | None:

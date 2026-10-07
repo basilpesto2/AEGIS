@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any
 import uuid
@@ -14,7 +16,8 @@ from AEGIS.audit import (
     PrivacySafeAuditLogger,
     validate_traffic_mode,
 )
-from AEGIS.detector_artifact import load_detector_artifact
+from AEGIS.detector_artifact import DetectorArtifact, load_detector_artifact_snapshot
+from AEGIS.detector_set import DetectorHeadConfig, OrDetector, load_or_detector
 from AEGIS.guardrail import GuardrailPolicy
 from AEGIS.http_server import (
     GuardrailHTTPService,
@@ -25,6 +28,8 @@ from AEGIS.provider_contract import load_provider
 from AEGIS.readiness import sha256_file
 from AEGIS.service import RequestLimits
 from AEGIS.service import evaluate_request_payload
+from AEGIS.secret_validation import validate_distinct_secrets, validate_secret
+from AEGIS.strict_json import strict_json_loads
 from AEGIS.system_resources import (
     ResourceRequirements,
     evaluate_resource_requirements,
@@ -36,6 +41,7 @@ from AEGIS.system_resources import (
 
 DEPLOYMENT_CONFIG_SCHEMA_VERSION = 1
 DEPLOYABLE_ERROR_ACTIONS = frozenset({"review", "block"})
+_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
 @dataclass(frozen=True)
@@ -43,37 +49,82 @@ class ServerConfig:
     host: str = "127.0.0.1"
     port: int = 8766
     api_token_env: str = "AEGIS_API_TOKEN"
+    admin_token_env: str = "AEGIS_ADMIN_TOKEN"
     max_body_bytes: int = 12 * 1024 * 1024
     max_concurrent_requests: int = 1
+    max_http_connections: int = 32
+    request_read_timeout_seconds: float = 15.0
     worker_mode: str = "in_process"
     inference_timeout_seconds: float = 60.0
     worker_startup_timeout_seconds: float = 600.0
 
     def __post_init__(self) -> None:
-        if not self.host.strip():
-            raise ValueError("server.host cannot be empty.")
-        if not 0 <= self.port <= 65_535:
+        if not isinstance(self.host, str) or not self.host.strip():
+            raise ValueError("server.host must be a non-empty string.")
+        if isinstance(self.port, bool) or not isinstance(self.port, int) or not 0 <= self.port <= 65_535:
             raise ValueError("server.port must be in [0, 65535].")
-        if not self.api_token_env.strip():
-            raise ValueError("server.api_token_env cannot be empty.")
-        if self.max_body_bytes <= 0 or self.max_concurrent_requests <= 0:
+        if (
+            not isinstance(self.api_token_env, str)
+            or _ENVIRONMENT_NAME.fullmatch(self.api_token_env) is None
+        ):
+            raise ValueError("server.api_token_env must be an environment variable name.")
+        if (
+            not isinstance(self.admin_token_env, str)
+            or _ENVIRONMENT_NAME.fullmatch(self.admin_token_env) is None
+        ):
+            raise ValueError(
+                "server.admin_token_env must be an environment variable name."
+            )
+        if self.admin_token_env == self.api_token_env:
+            raise ValueError(
+                "server.admin_token_env must be distinct from server.api_token_env."
+            )
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in (
+                self.max_body_bytes,
+                self.max_concurrent_requests,
+                self.max_http_connections,
+            )
+        ):
             raise ValueError("server size and concurrency limits must be positive.")
+        if (
+            isinstance(self.request_read_timeout_seconds, bool)
+            or not isinstance(self.request_read_timeout_seconds, (int, float))
+            or not math.isfinite(float(self.request_read_timeout_seconds))
+            or float(self.request_read_timeout_seconds) <= 0
+        ):
+            raise ValueError(
+                "server.request_read_timeout_seconds must be positive and finite."
+            )
         if self.worker_mode not in {"in_process", "process"}:
             raise ValueError("server.worker_mode must be 'in_process' or 'process'.")
         if self.worker_mode == "process" and self.max_concurrent_requests != 1:
             raise ValueError(
                 "server.worker_mode='process' currently requires max_concurrent_requests=1."
             )
-        if self.inference_timeout_seconds <= 0:
-            raise ValueError("server.inference_timeout_seconds must be positive.")
-        if self.worker_startup_timeout_seconds <= 0:
-            raise ValueError("server.worker_startup_timeout_seconds must be positive.")
+        if (
+            isinstance(self.inference_timeout_seconds, bool)
+            or not isinstance(self.inference_timeout_seconds, (int, float))
+            or not math.isfinite(float(self.inference_timeout_seconds))
+            or float(self.inference_timeout_seconds) <= 0
+        ):
+            raise ValueError("server.inference_timeout_seconds must be positive and finite.")
+        if (
+            isinstance(self.worker_startup_timeout_seconds, bool)
+            or not isinstance(self.worker_startup_timeout_seconds, (int, float))
+            or not math.isfinite(float(self.worker_startup_timeout_seconds))
+            or float(self.worker_startup_timeout_seconds) <= 0
+        ):
+            raise ValueError(
+                "server.worker_startup_timeout_seconds must be positive and finite."
+            )
 
 
 @dataclass(frozen=True)
 class DeploymentConfig:
     name: str
-    detector_path: Path
+    detector_path: Path | None
     provider_spec: str
     provider_options: dict[str, object]
     policy: GuardrailPolicy
@@ -91,11 +142,18 @@ class DeploymentConfig:
     audit: AuditLogConfig = AuditLogConfig()
     base_dir: Path = Path(".")
     resources: ResourceRequirements = ResourceRequirements()
+    detector_heads: tuple[DetectorHeadConfig, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.require_model_cache, bool):
+            raise ValueError("require_model_cache must be a boolean.")
+        if not isinstance(self.require_cuda, bool):
+            raise ValueError("require_cuda must be a boolean.")
 
 
 def load_deployment_config(path: str | Path) -> DeploymentConfig:
     config_path = Path(path).resolve()
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    payload = strict_json_loads(config_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Deployment config must contain a JSON object.")
     _require_keys(
@@ -118,16 +176,18 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         },
         context="deployment config",
     )
-    if payload["schema_version"] != DEPLOYMENT_CONFIG_SCHEMA_VERSION:
+    schema_version = payload.get("schema_version")
+    if (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version not in {DEPLOYMENT_CONFIG_SCHEMA_VERSION, 2}
+    ):
         raise ValueError(
-            f"Unsupported deployment config schema {payload['schema_version']!r}; "
-            f"expected {DEPLOYMENT_CONFIG_SCHEMA_VERSION}."
+            f"Unsupported deployment config schema {schema_version!r}; expected 1 or 2."
         )
-    name = str(payload["name"]).strip()
-    provider_spec = str(payload["provider"]).strip()
-    if not name or not provider_spec:
-        raise ValueError("Deployment name and provider cannot be empty.")
-    base_dir = (config_path.parent / str(payload.get("base_dir", "."))).resolve()
+    name = _nonempty_string(payload["name"], "deployment name")
+    provider_spec = _nonempty_string(payload["provider"], "provider")
+    base_dir = _resolve_path(config_path.parent, payload.get("base_dir", "."))
     policy_payload = _mapping(payload["policy"], "policy")
     server_payload = _mapping(payload["server"], "server")
     limits_payload = _mapping(payload.get("request_limits", {}), "request_limits")
@@ -155,8 +215,11 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
             "host",
             "port",
             "api_token_env",
+            "admin_token_env",
             "max_body_bytes",
             "max_concurrent_requests",
+            "max_http_connections",
+            "request_read_timeout_seconds",
             "worker_mode",
             "inference_timeout_seconds",
             "worker_startup_timeout_seconds",
@@ -182,6 +245,55 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         context="audit",
     )
     policy = GuardrailPolicy(**policy_payload)
+    detector_path: Path | None = None
+    detector_heads: tuple[DetectorHeadConfig, ...] = ()
+    if schema_version == 1:
+        detector_path = _resolve_path(base_dir, payload["detector"])
+    else:
+        detector_payload = _mapping(payload["detector"], "detector")
+        _require_keys(
+            detector_payload,
+            required={"mode", "heads"},
+            optional=set(),
+            context="detector",
+        )
+        if detector_payload["mode"] != "or":
+            raise ValueError("deployment detector.mode must be 'or'.")
+        raw_heads = detector_payload["heads"]
+        if not isinstance(raw_heads, list):
+            raise ValueError("deployment detector.heads must be an array.")
+        parsed_heads = []
+        for index, raw_head in enumerate(raw_heads):
+            head = _mapping(raw_head, f"detector.heads[{index}]")
+            _require_keys(
+                head,
+                required={"name", "artifact", "review_threshold"},
+                optional=set(),
+                context=f"detector.heads[{index}]",
+            )
+            review = head["review_threshold"]
+            if isinstance(review, bool) or not isinstance(review, (int, float)) or not math.isfinite(float(review)):
+                raise ValueError(f"detector.heads[{index}].review_threshold must be finite.")
+            parsed_heads.append(
+                DetectorHeadConfig(
+                    name=_nonempty_string(head["name"], f"detector.heads[{index}].name"),
+                    artifact_path=_resolve_path(base_dir, head["artifact"]),
+                    review_threshold=float(review),
+                )
+            )
+        detector_heads = tuple(parsed_heads)
+        if any(
+            value is not None
+            for value in (
+                policy.block_threshold,
+                policy.review_threshold,
+                policy.review_margin,
+            )
+        ):
+            raise ValueError(
+                "Dual OR deployments require null global block_threshold, "
+                "review_threshold, and review_margin values."
+            )
     server = ServerConfig(**server_payload)
     request_limits = RequestLimits(**limits_payload)
     cache_value = payload.get("cache_dir")
@@ -195,9 +307,24 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         raise ValueError(
             "Runtime evidence sessions must not configure a fixed evidence_session_id."
         )
+    require_model_cache = payload.get("require_model_cache", False)
+    require_cuda = payload.get("require_cuda", False)
+    if not isinstance(require_model_cache, bool):
+        raise ValueError("require_model_cache must be a boolean.")
+    if not isinstance(require_cuda, bool):
+        raise ValueError("require_cuda must be a boolean.")
+    target_profile_value = payload.get("target_profile")
+    target_profile = (
+        None
+        if target_profile_value is None
+        else _nonempty_string(target_profile_value, "target_profile")
+    )
+    traffic_mode = validate_traffic_mode(
+        _nonempty_string(payload.get("traffic_mode", "shadow"), "traffic_mode")
+    )
     return DeploymentConfig(
         name=name,
-        detector_path=_resolve_path(base_dir, payload["detector"]),
+        detector_path=detector_path,
         provider_spec=provider_spec,
         provider_options=provider_options,
         policy=policy,
@@ -208,12 +335,10 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         warmup_request_path=(
             None if warmup_value is None else _resolve_path(base_dir, warmup_value)
         ),
-        require_model_cache=bool(payload.get("require_model_cache", False)),
-        require_cuda=bool(payload.get("require_cuda", False)),
-        target_profile=(
-            None if payload.get("target_profile") is None else str(payload["target_profile"])
-        ),
-        traffic_mode=validate_traffic_mode(payload.get("traffic_mode", "shadow")),
+        require_model_cache=require_model_cache,
+        require_cuda=require_cuda,
+        target_profile=target_profile,
+        traffic_mode=traffic_mode,
         evidence_session_mode=evidence_session_mode,
         evidence_session_id=evidence_session_id,
         audit=AuditLogConfig(
@@ -222,7 +347,37 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         ),
         base_dir=base_dir,
         resources=ResourceRequirements(**resources_payload),
+        detector_heads=detector_heads,
     )
+
+
+def load_configured_detector(config: DeploymentConfig):
+    if config.detector_heads:
+        return load_or_detector(config.detector_heads)
+    if config.detector_path is None:
+        raise ValueError("Deployment has no detector artifact configured.")
+    artifact, digest = load_detector_artifact_snapshot(config.detector_path)
+    artifact.artifact_sha256 = digest
+    return artifact
+
+
+def _assert_final_target_detector_identity(
+    config: DeploymentConfig, artifact: DetectorArtifact | OrDetector
+) -> None:
+    if config.target_profile is None:
+        return
+    from AEGIS.target_profiles import get_target_profile
+
+    expected = get_target_profile(config.target_profile).detector_identity_sha256
+    actual = (
+        artifact.identity_sha256
+        if isinstance(artifact, OrDetector)
+        else getattr(artifact, "artifact_sha256", None)
+    )
+    if actual != expected:
+        raise ValueError(
+            "Detector identity changed after deployment preflight; refusing startup."
+        )
 
 
 def _target_input_modalities(
@@ -258,36 +413,45 @@ def build_service_from_config(
             + json.dumps(failed, sort_keys=True)
         )
     api_token = os.getenv(config.server.api_token_env) or None
+    admin_token = os.getenv(config.server.admin_token_env) or None
     require_token_for_bind(config.server.host, api_token)
     warmup_payload = None
     if config.warmup_request_path is not None:
-        warmup_payload = json.loads(config.warmup_request_path.read_text(encoding="utf-8"))
+        warmup_payload = strict_json_loads(
+            config.warmup_request_path.read_text(encoding="utf-8")
+        )
         if not isinstance(warmup_payload, dict):
             raise ValueError("Warmup request JSON must contain an object.")
     input_modalities = _target_input_modalities(config)
     if config.server.worker_mode == "process":
         from AEGIS.isolated_service import ProcessIsolatedGuardrailService
 
+        artifact = load_configured_detector(config)
+        _assert_final_target_detector_identity(config, artifact)
         isolated_service = ProcessIsolatedGuardrailService(
             artifact_path=config.detector_path,
+            detector_heads=config.detector_heads,
             provider_spec=config.provider_spec,
             provider_options=_provider_options(config),
             policy=config.policy,
             limits=config.request_limits,
             api_token=api_token,
+            admin_token=admin_token,
             max_body_bytes=config.server.max_body_bytes,
             max_concurrent_requests=config.server.max_concurrent_requests,
             inference_timeout_seconds=config.server.inference_timeout_seconds,
             worker_startup_timeout_seconds=config.server.worker_startup_timeout_seconds,
             warmup_payload=warmup_payload,
             traffic_mode=config.traffic_mode,
-            audit_logger=_audit_logger(config),
+            audit_logger=_audit_logger(config, artifact),
             target_profile=config.target_profile,
             input_modalities=input_modalities,
+            artifact_snapshot=artifact,
         )
         return isolated_service, {"warmup": isolated_service.startup_warmup}
 
-    artifact = load_detector_artifact(config.detector_path)
+    artifact = load_configured_detector(config)
+    _assert_final_target_detector_identity(config, artifact)
     provider = load_provider(config.provider_spec, _provider_options(config))
     service = GuardrailHTTPService(
         artifact=artifact,
@@ -295,10 +459,11 @@ def build_service_from_config(
         policy=config.policy,
         limits=config.request_limits,
         api_token=api_token,
+        admin_token=admin_token,
         max_body_bytes=config.server.max_body_bytes,
         max_concurrent_requests=config.server.max_concurrent_requests,
         traffic_mode=config.traffic_mode,
-        audit_logger=_audit_logger(config),
+        audit_logger=_audit_logger(config, artifact),
         target_profile=config.target_profile,
         input_modalities=input_modalities,
     )
@@ -331,18 +496,28 @@ def deployment_doctor(
         ),
     )
 
+    detector_paths = (
+        tuple(head.artifact_path for head in config.detector_heads)
+        if config.detector_heads
+        else (() if config.detector_path is None else (config.detector_path,))
+    )
     check(
         "detector_exists",
-        config.detector_path.exists(),
-        f"path={config.detector_path}",
+        bool(detector_paths) and all(path.exists() for path in detector_paths),
+        f"paths={[str(path) for path in detector_paths]}",
     )
     artifact = None
     provider = None
+    target_profile = None
     cuda_devices: tuple[dict[str, object], ...] = ()
-    if config.detector_path.exists():
+    if detector_paths and all(path.exists() for path in detector_paths):
         try:
-            artifact = load_detector_artifact(config.detector_path)
-            check("detector_loads", True, f"feature_dim={artifact.feature_dim}")
+            artifact = load_configured_detector(config)
+            check(
+                "detector_loads",
+                True,
+                f"mode={'or' if isinstance(artifact, OrDetector) else 'single'}, feature_dim={artifact.feature_dim}",
+            )
         except Exception as exc:
             check("detector_loads", False, str(exc))
     if artifact is not None:
@@ -386,16 +561,74 @@ def deployment_doctor(
             )
             from AEGIS.target_assets import resolve_target_asset
 
-            detector_asset = resolve_target_asset(
-                target_profile.detector,
-                source_root=config.base_dir,
-            )
-            expected_detector = detector_asset.path
-            check(
-                "target_profile_detector_matches",
-                expected_detector is not None and config.detector_path == expected_detector,
-                f"configured={config.detector_path}, profile={expected_detector}",
-            )
+            if target_profile.detector_heads:
+                configured_heads = {head.name: head for head in config.detector_heads}
+                expected_heads = {head.name: head for head in target_profile.detector_heads}
+                path_mismatches = {}
+                hash_mismatches = {}
+                threshold_mismatches = {}
+                for name, expected_head in expected_heads.items():
+                    configured_head = configured_heads.get(name)
+                    expected_asset = resolve_target_asset(
+                        expected_head.detector, source_root=config.base_dir
+                    )
+                    if configured_head is None or configured_head.artifact_path != expected_asset.path:
+                        path_mismatches[name] = True
+                        continue
+                    if sha256_file(configured_head.artifact_path) != expected_head.detector_sha256:
+                        hash_mismatches[name] = True
+                    if float(configured_head.review_threshold) != float(expected_head.review_threshold):
+                        threshold_mismatches[name] = True
+                check(
+                    "target_profile_detector_matches",
+                    set(configured_heads) == set(expected_heads) and not path_mismatches,
+                    f"path_mismatches={path_mismatches!r}",
+                )
+                check(
+                    "target_profile_detector_sha256_matches",
+                    not hash_mismatches,
+                    f"hash_mismatches={hash_mismatches!r}",
+                )
+                check(
+                    "target_profile_detector_thresholds_match",
+                    not threshold_mismatches,
+                    f"threshold_mismatches={threshold_mismatches!r}",
+                )
+                check(
+                    "target_profile_detector_identity_matches",
+                    isinstance(artifact, OrDetector)
+                    and artifact.identity_sha256
+                    == target_profile.detector_identity_sha256,
+                    (
+                        f"configured={getattr(artifact, 'identity_sha256', None)!r}, "
+                        f"profile={target_profile.detector_identity_sha256!r}"
+                    ),
+                )
+            else:
+                assert target_profile.detector is not None
+                detector_asset = resolve_target_asset(
+                    target_profile.detector,
+                    source_root=config.base_dir,
+                )
+                expected_detector = detector_asset.path
+                check(
+                    "target_profile_detector_matches",
+                    expected_detector is not None and config.detector_path == expected_detector,
+                    f"configured={config.detector_path}, profile={expected_detector}",
+                )
+                detector_digest = (
+                    sha256_file(config.detector_path)
+                    if config.detector_path is not None and config.detector_path.is_file()
+                    else None
+                )
+                check(
+                    "target_profile_detector_sha256_matches",
+                    detector_digest == target_profile.detector_sha256,
+                    (
+                        f"configured={detector_digest!r}, "
+                        f"profile={target_profile.detector_sha256!r}"
+                    ),
+                )
             check(
                 "target_profile_cuda_requirement_matches",
                 config.require_cuda == target_profile.require_cuda,
@@ -416,36 +649,38 @@ def deployment_doctor(
                 config.server.worker_mode == "process",
                 (f"worker_mode={config.server.worker_mode!r}, required='process'"),
             )
-            profile_options = {
-                name: value
-                for name, value in target_profile.provider_options.items()
-                if name not in {"model_revision", "tokenizer_revision"}
-            }
+            profile_options = target_profile.provider_options
             option_mismatches = {
                 name: {
                     "configured": config.provider_options.get(name),
-                    "profile": value,
+                    "profile": profile_options.get(name),
                 }
-                for name, value in profile_options.items()
-                if config.provider_options.get(name) != value
+                for name in sorted(set(config.provider_options) | set(profile_options))
+                if (
+                    name not in config.provider_options
+                    or name not in profile_options
+                    or config.provider_options[name] != profile_options[name]
+                )
             }
             check(
                 "target_profile_provider_options_match",
                 not option_mismatches,
                 f"mismatches={option_mismatches!r}",
             )
-            pinned_revision_names = [
-                name
-                for name in ("model_revision", "tokenizer_revision")
-                if target_profile.provider_options.get(name)
-            ]
-            missing_revisions = [
-                name for name in pinned_revision_names if not config.provider_options.get(name)
-            ]
+            pinned_revision_names = ("model_revision", "tokenizer_revision")
+            revision_mismatches = {
+                name: {
+                    "configured": config.provider_options.get(name),
+                    "profile": target_profile.provider_options.get(name),
+                }
+                for name in pinned_revision_names
+                if config.provider_options.get(name)
+                != target_profile.provider_options.get(name)
+            }
             check(
-                "target_profile_required_revisions_pinned",
-                not missing_revisions,
-                f"missing={missing_revisions!r}",
+                "target_profile_revisions_match",
+                not revision_mismatches,
+                f"mismatches={revision_mismatches!r}",
             )
             configured_resources = asdict(config.resources)
             resource_shortfalls = {
@@ -509,11 +744,14 @@ def deployment_doctor(
             if cuda_available:
                 for index in range(device_count):
                     properties = torch.cuda.get_device_properties(index)
+                    free_memory, runtime_total_memory = torch.cuda.mem_get_info(index)
                     detail["devices"].append(
                         {
                             "index": index,
                             "name": str(properties.name),
                             "total_memory_bytes": int(properties.total_memory),
+                            "runtime_total_memory_bytes": int(runtime_total_memory),
+                            "free_memory_bytes": int(free_memory),
                         }
                     )
             cuda_devices = tuple(detail["devices"])
@@ -558,6 +796,11 @@ def deployment_doctor(
         model_storage,
         model_family=("" if provider is None else str(getattr(provider, "model_family", ""))),
         revision=(None if provider is None else str(getattr(provider, "model_revision", ""))),
+        expected_content_sha256=(
+            None
+            if target_profile is None
+            else target_profile.model_source.expected_content_sha256
+        ),
     )
     check(
         "model_cache_integrity",
@@ -588,16 +831,19 @@ def deployment_doctor(
         )
         if warmup_exists:
             try:
-                warmup_payload = json.loads(config.warmup_request_path.read_text(encoding="utf-8"))
+                warmup_payload = strict_json_loads(
+                    config.warmup_request_path.read_text(encoding="utf-8")
+                )
                 check(
                     "warmup_request_valid_json",
                     isinstance(warmup_payload, dict),
                     "warmup request contains a JSON object",
                 )
-            except (OSError, json.JSONDecodeError) as exc:
+            except (OSError, UnicodeError, ValueError) as exc:
                 check("warmup_request_valid_json", False, str(exc))
 
     token = os.getenv(config.server.api_token_env) or None
+    admin_token = os.getenv(config.server.admin_token_env) or None
     try:
         require_token_for_bind(config.server.host, token)
         check(
@@ -607,13 +853,89 @@ def deployment_doctor(
         )
     except ValueError as exc:
         check("bind_authentication", False, str(exc))
+    _, api_secret_problems = validate_secret(
+        token,
+        name="API token",
+        required=config.server.host.strip().lower()
+        not in {"127.0.0.1", "localhost", "::1"},
+    )
+    check(
+        "api_token_strength",
+        not api_secret_problems,
+        "configured secret passes strength validation"
+        if not api_secret_problems
+        else " ".join(api_secret_problems),
+    )
+    _, admin_secret_problems = validate_secret(
+        admin_token,
+        name="Admin token",
+        required=False,
+    )
+    check(
+        "admin_token_strength",
+        not admin_secret_problems,
+        "configured secret passes strength validation"
+        if not admin_secret_problems
+        else " ".join(admin_secret_problems),
+        required=admin_token is not None,
+    )
+    distinct_secret_problems = validate_distinct_secrets(
+        {"API token": token, "Admin token": admin_token}
+    )
+    check(
+        "separate_admin_authentication",
+        not distinct_secret_problems,
+        (
+            f"api_env={config.server.api_token_env}, "
+            f"admin_env={config.server.admin_token_env}, "
+            f"admin_configured={admin_token is not None}; "
+            + (
+                "configured secrets are distinct"
+                if not distinct_secret_problems
+                else " ".join(distinct_secret_problems)
+            )
+        ),
+    )
+    check(
+        "runtime_admin_authentication_configured",
+        admin_token is not None,
+        f"env={config.server.admin_token_env}, configured={admin_token is not None}",
+        required=False,
+    )
 
     if config.policy.fingerprint_key_env is not None:
         fingerprint_key = os.getenv(config.policy.fingerprint_key_env)
+        _, fingerprint_secret_problems = validate_secret(
+            fingerprint_key,
+            name="Fingerprint HMAC key",
+            required=True,
+        )
         check(
             "fingerprint_hmac_key",
-            bool(fingerprint_key),
-            f"env={config.policy.fingerprint_key_env}, configured={bool(fingerprint_key)}",
+            not fingerprint_secret_problems,
+            (
+                f"env={config.policy.fingerprint_key_env}, "
+                f"configured={bool(fingerprint_key)}; "
+                + (
+                    "configured secret passes strength validation"
+                    if not fingerprint_secret_problems
+                    else " ".join(fingerprint_secret_problems)
+                )
+            ),
+        )
+        all_secret_problems = validate_distinct_secrets(
+            {
+                "API token": token,
+                "Admin token": admin_token,
+                "Fingerprint HMAC key": fingerprint_key,
+            }
+        )
+        check(
+            "deployment_secrets_distinct",
+            not all_secret_problems,
+            "configured secrets are distinct"
+            if not all_secret_problems
+            else " ".join(all_secret_problems),
         )
 
     audit_required = config.target_profile is not None
@@ -637,15 +959,16 @@ def deployment_doctor(
         ),
         required=evidence_session_required,
     )
-    runtime_template_valid = config.evidence_session_mode != "runtime" or (
-        config.audit.path is not None and "{evidence_session_id}" in str(config.audit.path)
+    runtime_path_bounded = config.evidence_session_mode != "runtime" or (
+        config.audit.path is not None
+        and "{evidence_session_id}" not in str(config.audit.path)
     )
     check(
-        "runtime_evidence_session_path_template",
-        runtime_template_valid,
+        "runtime_evidence_session_stable_audit_path",
+        runtime_path_bounded,
         (
             f"mode={config.evidence_session_mode!r}, path={config.audit.path}, "
-            "placeholder={evidence_session_id}"
+            "runtime sessions share one bounded rotating target log"
         ),
         required=evidence_session_required,
     )
@@ -662,17 +985,12 @@ def deployment_doctor(
         except OSError as exc:
             check("audit_directory_writable", False, str(exc))
 
-    try:
-        with tempfile.NamedTemporaryFile(dir=config.config_path.parent):
-            pass
-        check("config_directory_writable", True, f"path={config.config_path.parent}")
-    except OSError as exc:
-        check("config_directory_writable", False, str(exc))
-
     probe_report = None
     if probe_path is not None and artifact is not None and provider is not None:
         try:
-            payload = json.loads(Path(probe_path).read_text(encoding="utf-8"))
+            payload = strict_json_loads(
+                Path(probe_path).read_text(encoding="utf-8")
+            )
             probe_report = evaluate_request_payload(
                 artifact,
                 provider,
@@ -751,7 +1069,10 @@ def _deployment_doctor_remediation(
     if check_name == "policy_action_on_error_fail_closed":
         return "Set policy.action_on_error to 'review' or 'block'; never use 'allow'."
     if check_name in {"detector_exists", "detector_loads"}:
-        return f"Restore and verify the detector artifact at {config.detector_path}."
+        paths = [str(head.artifact_path) for head in config.detector_heads]
+        if config.detector_path is not None:
+            paths.append(str(config.detector_path))
+        return f"Restore and verify the detector artifact(s): {paths}."
     if check_name.startswith("target_profile_"):
         config_name = (
             "configs/aegis.llava.deployment.container.json"
@@ -781,14 +1102,12 @@ def _deployment_doctor_remediation(
     if check_name in {
         "privacy_safe_audit_configured",
         "evidence_session_id_configured",
-        "runtime_evidence_session_path_template",
+        "runtime_evidence_session_stable_audit_path",
         "audit_directory_writable",
     }:
         return "Restore the target's privacy-safe audit/session settings and writable audit path."
     if check_name == "resource_preflight":
         return "Free or provision the RAM, disk, model storage, and VRAM required by the target."
-    if check_name == "config_directory_writable":
-        return "Move the config to an operator-owned writable deployment directory."
     if check_name == "end_to_end_probe":
         return "Inspect the bounded probe and provider error, then rerun doctor before serving."
     return "Inspect this check's detail, restore the pinned deployment contract, and rerun doctor."
@@ -810,20 +1129,25 @@ def _provider_options(config: DeploymentConfig) -> dict[str, object]:
     return options
 
 
-def _audit_logger(config: DeploymentConfig) -> PrivacySafeAuditLogger | None:
+def _audit_logger(
+    config: DeploymentConfig,
+    detector: DetectorArtifact | OrDetector | None = None,
+) -> PrivacySafeAuditLogger | None:
     if config.audit.path is None:
         return None
     session_id = config.evidence_session_id
     audit_config = config.audit
     if config.evidence_session_mode == "runtime":
         session_id = str(uuid.uuid4())
-        template = str(config.audit.path)
-        if "{evidence_session_id}" not in template:
+        configured_path = str(config.audit.path)
+        if "{evidence_session_id}" in configured_path:
             raise ValueError(
-                "Runtime evidence sessions require {evidence_session_id} in audit.path."
+                "Runtime evidence sessions require one stable audit.path so rotation "
+                "bounds storage across process restarts; the session UUID is recorded "
+                "inside every event."
             )
         audit_config = AuditLogConfig(
-            path=Path(template.replace("{evidence_session_id}", session_id)),
+            path=Path(configured_path),
             max_bytes=config.audit.max_bytes,
             backup_count=config.audit.backup_count,
             fsync=config.audit.fsync,
@@ -835,7 +1159,34 @@ def _audit_logger(config: DeploymentConfig) -> PrivacySafeAuditLogger | None:
             "target_profile": config.target_profile,
             "evidence_session_id": session_id,
             "deployment_config_sha256": sha256_file(config.config_path),
-            "detector_sha256": sha256_file(config.detector_path),
+            # Never reload detector paths here: audit identity must describe the
+            # exact object being served, not a later filesystem state.
+            "detector_sha256": (
+                None
+                if isinstance(detector, OrDetector)
+                else (
+                    getattr(detector, "artifact_sha256", None)
+                    if detector is not None
+                    else (
+                        sha256_file(config.detector_path)
+                        if config.detector_path is not None
+                        else None
+                    )
+                )
+            ),
+            "detector_identity_sha256": (
+                detector.identity_sha256
+                if isinstance(detector, OrDetector)
+                else (
+                    getattr(detector, "artifact_sha256", None)
+                    if detector is not None
+                    else (
+                        sha256_file(config.detector_path)
+                        if config.detector_path is not None
+                        else None
+                    )
+                )
+            ),
         },
     )
 
@@ -889,6 +1240,12 @@ def _require_keys(
         raise ValueError(f"{context} contains unknown keys: {unknown}")
 
 
+def _nonempty_string(value: object, context: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{context} must be a non-empty string.")
+    return value.strip()
+
+
 def _resolve_path(base_dir: Path, value: object) -> Path:
-    path = Path(str(value))
+    path = Path(_nonempty_string(value, "deployment path"))
     return path.resolve() if path.is_absolute() else (base_dir / path).resolve()

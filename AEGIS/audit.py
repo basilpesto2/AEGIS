@@ -23,10 +23,20 @@ class AuditLogConfig:
     fsync: bool = False
 
     def __post_init__(self) -> None:
-        if self.max_bytes <= 0:
+        if (
+            isinstance(self.max_bytes, bool)
+            or not isinstance(self.max_bytes, int)
+            or self.max_bytes <= 0
+        ):
             raise ValueError("audit.max_bytes must be positive.")
-        if self.backup_count < 0:
+        if (
+            isinstance(self.backup_count, bool)
+            or not isinstance(self.backup_count, int)
+            or self.backup_count < 0
+        ):
             raise ValueError("audit.backup_count must be non-negative.")
+        if not isinstance(self.fsync, bool):
+            raise ValueError("audit.fsync must be a boolean.")
 
 
 def validate_traffic_mode(value: str) -> str:
@@ -96,7 +106,7 @@ class PrivacySafeAuditLogger:
         self._lock = Lock()
 
     def readiness_context(self) -> dict[str, str | None]:
-        return {
+        payload = {
             "evidence_session_id": self.context.get("evidence_session_id"),
             "audit_path": str(self.path),
             "deployment_config_sha256": self.context.get(
@@ -104,6 +114,10 @@ class PrivacySafeAuditLogger:
             ),
             "detector_sha256": self.context.get("detector_sha256"),
         }
+        identity = self.context.get("detector_identity_sha256")
+        if identity and identity != self.context.get("detector_sha256"):
+            payload["detector_identity_sha256"] = identity
+        return payload
 
     def record_response(
         self,
@@ -196,7 +210,7 @@ def _audit_event(
     duration_seconds: float,
     context: dict[str, str | None],
 ) -> dict[str, object]:
-    return {
+    payload = {
         "schema_version": AUDIT_SCHEMA_VERSION,
         "event_id": event_id,
         "timestamp_utc": timestamp,
@@ -229,6 +243,10 @@ def _audit_event(
         "deployment_config_sha256": context.get("deployment_config_sha256"),
         "detector_sha256": context.get("detector_sha256"),
     }
+    identity = context.get("detector_identity_sha256")
+    if identity and identity != context.get("detector_sha256"):
+        payload["detector_identity_sha256"] = identity
+    return payload
 
 
 def _backup_path(path: Path, index: int) -> Path:

@@ -5,6 +5,8 @@ from typing import Any
 
 
 _PROVIDER_ATTRS = ("model_family", "model_id", "pooling", "feature_dim")
+FUSED_TEXT_IMAGE_POOLING = "text_image_tokens"
+FUSED_COMPONENT_POOLINGS = ("text_tokens", "image_tokens")
 
 
 def load_provider(

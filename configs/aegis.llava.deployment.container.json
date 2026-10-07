@@ -3,18 +3,32 @@
   "traffic_mode": "shadow",
   "evidence_session_mode": "runtime",
   "audit": {
-    "path": "/var/lib/aegis/audit/aegis-llava05b-{evidence_session_id}.jsonl",
+    "path": "/var/lib/aegis/audit/aegis-llava05b.jsonl",
     "max_bytes": 104857600,
     "backup_count": 5,
     "fsync": false
   },
   "cache_dir": "/app/models/huggingface",
-  "detector": "models/aegis/aegis_llava_onevision_05b_bordair_ocr_v6.npz",
+  "detector": {
+    "mode": "or",
+    "heads": [
+      {
+        "name": "text",
+        "artifact": "models/aegis/llava05b_v7_dual_or/llava05b_text_head_v1.npz",
+        "review_threshold": 0.9773003604375604
+      },
+      {
+        "name": "image",
+        "artifact": "models/aegis/llava05b_v7_dual_or/llava05b_image_head_v1.npz",
+        "review_threshold": 0.41109073768976995
+      }
+    ]
+  },
   "name": "aegis-llava05b-container",
   "policy": {
     "action_on_error": "review",
     "block_threshold": null,
-    "review_threshold": 0.2792006876624334,
+    "review_threshold": null,
     "hash_images": true,
     "fingerprint_key_env": "AEGIS_FINGERPRINT_KEY",
     "require_matching_provenance": true,
@@ -26,13 +40,13 @@
     "device_map": "auto",
     "environment_overrides": false,
     "local_files_only": true,
-    "feature_dim": 896,
+    "feature_dim": 1792,
     "layer": -1,
     "max_image_edge": 384,
     "model_id": "models\\huggingface\\llava-onevision-qwen2-0.5b-ov-hf",
     "runtime_model_id": "models/huggingface/llava-onevision-qwen2-0.5b-ov-hf",
     "model_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
-    "pooling": "image_tokens",
+    "pooling": "text_image_tokens",
     "request_cache_max_entries": 128,
     "request_cache_ttl_seconds": 300.0,
     "tokenizer_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
@@ -63,15 +77,18 @@
     "min_model_cache_bytes": 1610612736,
     "min_total_physical_bytes": 8000000000
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "target_profile": "llava05b",
   "server": {
+    "admin_token_env": "AEGIS_ADMIN_TOKEN",
     "api_token_env": "AEGIS_API_TOKEN",
     "host": "0.0.0.0",
     "inference_timeout_seconds": 120.0,
     "max_body_bytes": 12582912,
     "max_concurrent_requests": 1,
+    "max_http_connections": 32,
     "port": 8766,
+    "request_read_timeout_seconds": 15.0,
     "worker_mode": "process",
     "worker_startup_timeout_seconds": 600.0
   },

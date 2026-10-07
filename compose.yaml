@@ -7,6 +7,7 @@ x-aegis-runtime: &aegis-runtime
   build: *aegis-build
   image: aegis-mllm-guard:local
   environment:
+    AEGIS_ADMIN_TOKEN: ${AEGIS_ADMIN_TOKEN:-}
     AEGIS_API_TOKEN: ${AEGIS_API_TOKEN:?Set AEGIS_API_TOKEN in .env}
     AEGIS_FINGERPRINT_KEY: ${AEGIS_FINGERPRINT_KEY:?Set AEGIS_FINGERPRINT_KEY in .env}
     HF_HUB_OFFLINE: "1"
@@ -14,9 +15,15 @@ x-aegis-runtime: &aegis-runtime
   ports:
     - "127.0.0.1:8766:8766"
   volumes:
-    - aegis_model_cache:/app/models/huggingface
+    # Preparation owns cache mutation. Runtime containers consume the exact
+    # verified snapshot read-only, closing the verify/load mutation window.
+    - aegis_model_cache:/app/models/huggingface:ro
     - aegis_audit:/var/lib/aegis/audit
   restart: unless-stopped
+  # The shipped services allow one inference to run for as long as 120 seconds.
+  # Leave enough time for that request to finish, write its audit event, and tear
+  # down the isolated worker before Docker escalates from SIGTERM to SIGKILL.
+  stop_grace_period: 180s
   deploy:
     resources:
       reservations:

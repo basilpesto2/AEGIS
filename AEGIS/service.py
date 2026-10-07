@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from AEGIS.detector_artifact import DetectorArtifact
+from AEGIS.detector_set import OrDetector
 from AEGIS.guardrail import (
     EmbeddingProvider,
     GuardrailPolicy,
@@ -21,6 +22,18 @@ from AEGIS.guardrail import (
 )
 
 REQUEST_MODALITIES = ("text", "image", "image_text")
+REQUEST_PAYLOAD_FIELDS = frozenset(
+    {
+        "text",
+        "image_path",
+        "image_paths",
+        "request_id",
+        "metadata",
+        "images",
+        "image_base64",
+        "image_media_type",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +53,8 @@ class RequestLimits:
     allowed_image_root: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.allow_local_image_paths, bool):
+            raise ValueError("allow_local_image_paths must be a boolean.")
         for name in (
             "max_batch_size",
             "max_text_characters",
@@ -48,8 +63,36 @@ class RequestLimits:
             "max_image_bytes",
             "max_image_pixels",
         ):
-            if int(getattr(self, name)) <= 0:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be positive.")
+        supported_media_types = {"image/jpeg", "image/png", "image/webp"}
+        if (
+            not isinstance(self.allowed_image_media_types, (list, tuple))
+            or not self.allowed_image_media_types
+            or any(
+                not isinstance(value, str) or value not in supported_media_types
+                for value in self.allowed_image_media_types
+            )
+            or len(set(self.allowed_image_media_types))
+            != len(self.allowed_image_media_types)
+        ):
+            raise ValueError(
+                "allowed_image_media_types must be a non-empty unique sequence "
+                "containing only image/jpeg, image/png, or image/webp."
+            )
+        object.__setattr__(
+            self,
+            "allowed_image_media_types",
+            tuple(self.allowed_image_media_types),
+        )
+        if self.allowed_image_root is not None and (
+            not isinstance(self.allowed_image_root, str)
+            or not self.allowed_image_root.strip()
+        ):
+            raise ValueError(
+                "allowed_image_root must be a non-empty string when provided."
+            )
         if self.allowed_image_root is not None and not self.allow_local_image_paths:
             raise ValueError(
                 "allowed_image_root requires allow_local_image_paths to be enabled."
@@ -57,7 +100,7 @@ class RequestLimits:
 
 
 def evaluate_feature_payload(
-    artifact: DetectorArtifact,
+    artifact: DetectorArtifact | OrDetector,
     payload: dict[str, Any],
     policy: GuardrailPolicy | None = None,
 ) -> dict[str, object]:
@@ -89,7 +132,7 @@ def evaluate_feature_payload(
 
 
 def evaluate_request_payload(
-    artifact: DetectorArtifact,
+    artifact: DetectorArtifact | OrDetector,
     provider: EmbeddingProvider,
     payload: dict[str, Any],
     policy: GuardrailPolicy | None = None,
@@ -111,13 +154,7 @@ def evaluate_request_payload(
 
     effective_limits = limits or RequestLimits(allow_local_image_paths=True)
     effective_modalities = normalize_input_modalities(input_modalities)
-    request_payloads = payload.get("requests")
-    if request_payloads is None:
-        raw_requests = [payload]
-    else:
-        if not isinstance(request_payloads, list) or not request_payloads:
-            raise ValueError("'requests' must be a non-empty list when provided.")
-        raw_requests = request_payloads
+    raw_requests = validate_request_payload_schema(payload)
     if len(raw_requests) > effective_limits.max_batch_size:
         raise ValueError(
             f"Batch contains {len(raw_requests)} requests; maximum is "
@@ -157,6 +194,114 @@ def evaluate_request_payload(
             "summary": decision_summary(decisions),
             "decisions": [decision.to_dict() for decision in decisions],
         }
+
+
+def validate_request_payload_schema(payload: object) -> list[dict[str, Any]]:
+    """Validate and return the unambiguous request objects in an API payload.
+
+    A batch envelope contains only ``requests``. A single-request payload contains
+    only fields that are actually consumed by :func:`evaluate_request_payload`.
+    Rejecting unknown and conflicting aliases prevents callers from attaching
+    unevaluated content that could later be forwarded to a downstream model.
+    """
+
+    if not isinstance(payload, dict):
+        raise ValueError("JSON request body must be an object.")
+    if "requests" in payload:
+        unknown = sorted(set(payload) - {"requests"})
+        if unknown:
+            raise ValueError(
+                "Batch request envelope contains unevaluated fields: "
+                f"{unknown}. The envelope may contain only 'requests'."
+            )
+        requests = payload["requests"]
+        if not isinstance(requests, list) or not requests:
+            raise ValueError("'requests' must be a non-empty list when provided.")
+        raw_requests = requests
+    else:
+        raw_requests = [payload]
+
+    for index, request in enumerate(raw_requests, start=1):
+        _validate_request_object_schema(request, index=index)
+    return raw_requests
+
+
+def _validate_request_object_schema(payload: object, *, index: int) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError(f"Request {index} must be an object.")
+    unknown = sorted(set(payload) - REQUEST_PAYLOAD_FIELDS)
+    if unknown:
+        raise ValueError(f"Request {index} contains unknown fields: {unknown}.")
+
+    for field_name in ("text", "request_id"):
+        value = payload.get(field_name)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"Request {index} field '{field_name}' must be a string.")
+    metadata = payload.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        raise ValueError(f"Request {index} field 'metadata' must be an object.")
+
+    image_sources = [
+        field_name
+        for field_name in ("images", "image_base64", "image_path", "image_paths")
+        if field_name in payload
+    ]
+    if len(image_sources) > 1:
+        raise ValueError(
+            f"Request {index} must use at most one image source; found "
+            f"{image_sources}."
+        )
+    image_path = payload.get("image_path")
+    if image_path is not None and not isinstance(image_path, str):
+        raise ValueError(f"Request {index} field 'image_path' must be a string.")
+    image_paths = payload.get("image_paths")
+    if image_paths is not None and (
+        not isinstance(image_paths, list)
+        or any(not isinstance(value, str) for value in image_paths)
+    ):
+        raise ValueError(
+            f"Request {index} field 'image_paths' must be a list of strings."
+        )
+
+    if "image_media_type" in payload and "image_base64" not in payload:
+        raise ValueError(
+            f"Request {index} field 'image_media_type' requires 'image_base64'."
+        )
+    image_base64 = payload.get("image_base64")
+    if image_base64 is not None and not isinstance(image_base64, str):
+        raise ValueError(f"Request {index} field 'image_base64' must be a string.")
+    image_media_type = payload.get("image_media_type")
+    if image_media_type is not None and not isinstance(image_media_type, str):
+        raise ValueError(f"Request {index} field 'image_media_type' must be a string.")
+
+    images = payload.get("images")
+    if images is not None:
+        if not isinstance(images, list) or not images:
+            raise ValueError(
+                f"Request {index} field 'images' must be a non-empty list."
+            )
+        for image_index, image in enumerate(images, start=1):
+            if not isinstance(image, dict):
+                raise ValueError(
+                    f"Request {index} image {image_index} must be an object."
+                )
+            unknown_image_fields = sorted(set(image) - {"media_type", "base64"})
+            if unknown_image_fields:
+                raise ValueError(
+                    f"Request {index} image {image_index} contains unknown fields: "
+                    f"{unknown_image_fields}."
+                )
+            if set(image) != {"media_type", "base64"}:
+                raise ValueError(
+                    f"Request {index} image {image_index} must contain 'media_type' "
+                    "and 'base64'."
+                )
+            if not isinstance(image["media_type"], str) or not isinstance(
+                image["base64"], str
+            ):
+                raise ValueError(
+                    f"Request {index} image {image_index} fields must be strings."
+                )
 
 
 def normalize_input_modalities(
@@ -313,7 +458,12 @@ def _decode_image_record(
         with Image.open(BytesIO(content)) as image:
             width, height = image.size
             actual_format = str(image.format or "").upper()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+    ) as exc:
         raise ValueError("Decoded image is not a supported, valid image.") from exc
     if width <= 0 or height <= 0 or width * height > limits.max_image_pixels:
         raise ValueError(

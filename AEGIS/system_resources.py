@@ -23,8 +23,8 @@ class ResourceRequirements:
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
-            if int(value) < 0:
-                raise ValueError(f"resources.{name} cannot be negative.")
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"resources.{name} must be a non-negative integer.")
 
 
 @dataclass(frozen=True)
@@ -118,16 +118,16 @@ def evaluate_resource_requirements(
         requirements.min_model_cache_bytes,
     )
     if requirements.min_cuda_device_memory_bytes > 0:
-        largest = max(
+        largest_available = max(
             (
-                int(device.get("total_memory_bytes", 0))
+                int(device.get("free_memory_bytes", 0))
                 for device in snapshot.cuda_devices
             ),
             default=0,
         )
         minimum(
-            "cuda_device_memory",
-            largest,
+            "cuda_device_available_memory",
+            largest_available,
             requirements.min_cuda_device_memory_bytes,
         )
     failed_names = {str(check["name"]) for check in checks if not check["ok"]}
@@ -142,9 +142,10 @@ def evaluate_resource_requirements(
         recommendations.append("Free disk space or move the model cache to a larger volume.")
     if "model_cache_size" in failed_names:
         recommendations.append("Complete the target model download before offline startup.")
-    if "cuda_device_memory" in failed_names:
+    if "cuda_device_available_memory" in failed_names:
         recommendations.append(
-            "Use a GPU with more VRAM or a separately validated smaller/quantized target."
+            "Free GPU memory, use a GPU with more VRAM, or select a separately "
+            "validated smaller/quantized target."
         )
     return {
         "ok": all(bool(check["ok"]) for check in checks),
@@ -181,6 +182,7 @@ def inspect_model_cache(
     *,
     model_family: str,
     revision: str | None = None,
+    expected_content_sha256: str | None = None,
 ) -> dict[str, object]:
     if model_path is None:
         return {
@@ -299,23 +301,28 @@ def inspect_model_cache(
     if not revision_ok:
         missing_files.append(f"snapshot revision {revision}")
 
-    if kind == "local_directory" and revision and is_sha256(revision):
+    expected_content = expected_content_sha256
+    if expected_content is None and kind == "local_directory" and revision and is_sha256(revision):
+        expected_content = revision
+    if expected_content is not None:
+        if not is_sha256(expected_content):
+            raise ValueError("expected_content_sha256 must be a SHA-256 hex digest.")
         try:
-            content_sha256 = str(model_directory_fingerprint(root)["content_sha256"])
-            local_revision_ok = content_sha256 == revision
+            content_sha256 = str(model_directory_fingerprint(snapshot)["content_sha256"])
+            content_ok = content_sha256 == expected_content
         except (OSError, ValueError):
             content_sha256 = None
-            local_revision_ok = False
+            content_ok = False
         checks.append(
             {
-                "name": "local_runtime_content_matches_revision",
-                "ok": local_revision_ok,
-                "requested": revision,
+                "name": "model_runtime_content_sha256",
+                "ok": content_ok,
+                "expected": expected_content,
                 "computed": content_sha256,
             }
         )
-        if not local_revision_ok:
-            missing_files.append("local runtime content matching configured revision")
+        if not content_ok:
+            missing_files.append("model runtime content matching configured SHA-256")
 
     ok = all(bool(check["ok"]) for check in checks)
     return {
@@ -323,6 +330,7 @@ def inspect_model_cache(
         "kind": kind,
         "path": str(root),
         "revision": resolved_revision,
+        "expected_content_sha256": expected_content,
         "snapshot_path": str(snapshot),
         "checks": checks,
         "missing_files": sorted(set(missing_files)),
@@ -368,24 +376,31 @@ def _memory_snapshot(warnings: list[str]) -> tuple[int | None, ...]:
         except (OSError, AttributeError) as exc:
             warnings.append(f"Windows memory probe failed: {exc}")
             return (None, None, None, None)
-    try:
-        page_size = int(os.sysconf("SC_PAGE_SIZE"))
-        total_physical = page_size * int(os.sysconf("SC_PHYS_PAGES"))
-        available_physical = page_size * int(os.sysconf("SC_AVPHYS_PAGES"))
-    except (AttributeError, OSError, ValueError) as exc:
-        warnings.append(f"Physical memory probe failed: {exc}")
-        total_physical = available_physical = None
+    total_physical = available_physical = None
     total_virtual = available_virtual = None
     meminfo = Path("/proc/meminfo")
     if meminfo.is_file():
         try:
             values = _parse_meminfo(meminfo.read_text(encoding="utf-8"))
+            total_physical = values.get("MemTotal")
+            available_physical = values.get("MemAvailable")
             total_virtual = values.get("CommitLimit")
             committed = values.get("Committed_AS")
             if total_virtual is not None and committed is not None:
                 available_virtual = max(0, total_virtual - committed)
         except OSError as exc:
-            warnings.append(f"Virtual memory probe failed: {exc}")
+            warnings.append(f"Linux memory probe failed: {exc}")
+    if total_physical is None or available_physical is None:
+        try:
+            page_size = int(os.sysconf("SC_PAGE_SIZE"))
+            total_physical = total_physical or (
+                page_size * int(os.sysconf("SC_PHYS_PAGES"))
+            )
+            available_physical = available_physical or (
+                page_size * int(os.sysconf("SC_AVPHYS_PAGES"))
+            )
+        except (AttributeError, OSError, ValueError) as exc:
+            warnings.append(f"Physical memory fallback probe failed: {exc}")
     return total_physical, available_physical, total_virtual, available_virtual
 
 

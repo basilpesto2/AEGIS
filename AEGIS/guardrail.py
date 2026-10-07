@@ -6,16 +6,20 @@ import hmac
 import math
 import os
 from pathlib import Path
+import re
 from typing import Protocol
 
 import numpy as np
 import pandas as pd
 
 from AEGIS.detector_artifact import DetectorArtifact
+from AEGIS.detector_set import OrDetector
+from AEGIS.secret_validation import validate_secret
 
 
 GUARDRAIL_SCHEMA_VERSION = 1
 VALID_ACTIONS = {"allow", "review", "block"}
+_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
 class EmbeddingProvider(Protocol):
@@ -23,6 +27,7 @@ class EmbeddingProvider(Protocol):
 
     model_family: str
     model_id: str
+    layer: int
     model_revision: str
     tokenizer_revision: str
     preprocessing_sha256: str
@@ -94,9 +99,29 @@ class GuardrailPolicy:
     fingerprint_key_env: str | None = None
 
     def __post_init__(self) -> None:
-        if self.block_threshold is not None and not 0.0 < self.block_threshold < 1.0:
+        if not isinstance(self.require_matching_provenance, bool):
+            raise ValueError("require_matching_provenance must be a boolean.")
+        if not isinstance(self.hash_images, bool):
+            raise ValueError("hash_images must be a boolean.")
+        if (
+            self.block_threshold is not None
+            and (
+                isinstance(self.block_threshold, bool)
+                or not isinstance(self.block_threshold, (int, float))
+                or not math.isfinite(float(self.block_threshold))
+                or not 0.0 < self.block_threshold < 1.0
+            )
+        ):
             raise ValueError("block_threshold must be between 0 and 1.")
-        if self.review_threshold is not None and not 0.0 <= self.review_threshold < 1.0:
+        if (
+            self.review_threshold is not None
+            and (
+                isinstance(self.review_threshold, bool)
+                or not isinstance(self.review_threshold, (int, float))
+                or not math.isfinite(float(self.review_threshold))
+                or not 0.0 <= self.review_threshold < 1.0
+            )
+        ):
             raise ValueError("review_threshold must be in [0, 1).")
         if (
             self.review_threshold is not None
@@ -104,12 +129,25 @@ class GuardrailPolicy:
             and self.review_threshold >= self.block_threshold
         ):
             raise ValueError("review_threshold must be below block_threshold.")
-        if self.review_margin is not None and not 0.0 <= self.review_margin < 0.5:
+        if (
+            self.review_margin is not None
+            and (
+                isinstance(self.review_margin, bool)
+                or not isinstance(self.review_margin, (int, float))
+                or not math.isfinite(float(self.review_margin))
+                or not 0.0 <= self.review_margin < 0.5
+            )
+        ):
             raise ValueError("review_margin must be in [0, 0.5).")
         if self.action_on_error not in VALID_ACTIONS:
             raise ValueError(f"action_on_error must be one of {sorted(VALID_ACTIONS)}.")
-        if self.fingerprint_key_env is not None and not self.fingerprint_key_env.strip():
-            raise ValueError("fingerprint_key_env cannot be empty when provided.")
+        if self.fingerprint_key_env is not None and (
+            not isinstance(self.fingerprint_key_env, str)
+            or _ENVIRONMENT_NAME.fullmatch(self.fingerprint_key_env) is None
+        ):
+            raise ValueError(
+                "fingerprint_key_env must be an environment variable name when provided."
+            )
 
 
 @dataclass(frozen=True)
@@ -136,6 +174,9 @@ class GuardrailDecision:
     detector_source: str | None = None
     error_type: str | None = None
     error_detail: str | None = None
+    detector_mode: str = "single"
+    decisive_head: str | None = None
+    head_decisions: tuple[dict[str, object], ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -144,6 +185,12 @@ class GuardrailDecision:
         payload["reasons"] = list(self.reasons)
         payload["image_sha256"] = list(self.image_sha256)
         payload["image_hmac_sha256"] = list(self.image_hmac_sha256)
+        if self.detector_mode == "single" and not self.head_decisions:
+            payload.pop("detector_mode", None)
+            payload.pop("decisive_head", None)
+            payload.pop("head_decisions", None)
+        else:
+            payload["head_decisions"] = [dict(item) for item in self.head_decisions]
         return payload
 
 
@@ -152,12 +199,24 @@ class GuardrailRuntime:
 
     def __init__(
         self,
-        artifact: DetectorArtifact,
+        artifact: DetectorArtifact | OrDetector,
         policy: GuardrailPolicy | None = None,
         include_error_details: bool = False,
     ) -> None:
         self.artifact = artifact
         self.policy = policy or GuardrailPolicy()
+        if isinstance(self.artifact, OrDetector) and any(
+            value is not None
+            for value in (
+                self.policy.block_threshold,
+                self.policy.review_threshold,
+                self.policy.review_margin,
+            )
+        ):
+            raise ValueError(
+                "Dual OR detectors use explicit per-head thresholds; global score "
+                "threshold overrides must be null."
+            )
         if (
             self.policy.review_threshold is not None
             and self.policy.review_threshold >= self.threshold
@@ -170,6 +229,8 @@ class GuardrailRuntime:
 
     @property
     def threshold(self) -> float:
+        if isinstance(self.artifact, OrDetector):
+            return float(self.artifact.ordered_heads[0].artifact.threshold)
         return (
             float(self.policy.block_threshold)
             if self.policy.block_threshold is not None
@@ -178,6 +239,8 @@ class GuardrailRuntime:
 
     @property
     def review_margin(self) -> float:
+        if isinstance(self.artifact, OrDetector):
+            return 0.0
         return (
             float(self.policy.review_margin)
             if self.policy.review_margin is not None
@@ -186,6 +249,8 @@ class GuardrailRuntime:
 
     @property
     def review_threshold(self) -> float | None:
+        if isinstance(self.artifact, OrDetector):
+            return float(self.artifact.ordered_heads[0].review_threshold)
         return (
             None
             if self.policy.review_threshold is None
@@ -267,6 +332,11 @@ class GuardrailRuntime:
                 detector_source=self.artifact.source,
                 error_type=type(exc).__name__,
                 error_detail=str(exc) if self.include_error_details else None,
+                detector_mode=(
+                    self.artifact.mode
+                    if isinstance(self.artifact, OrDetector)
+                    else "single"
+                ),
             )
 
     def evaluate_features(
@@ -282,6 +352,18 @@ class GuardrailRuntime:
         modalities: list[str | None] | None = None,
     ) -> list[GuardrailDecision]:
         x = np.asarray(features, dtype=np.float64)
+        if isinstance(self.artifact, OrDetector):
+            return self._evaluate_or_features(
+                x,
+                sample_ids=sample_ids,
+                request_ids=request_ids,
+                prompt_hashes=prompt_hashes,
+                image_hashes=image_hashes,
+                prompt_hmac_hashes=prompt_hmac_hashes,
+                image_hmac_hashes=image_hmac_hashes,
+                fingerprint_algorithms=fingerprint_algorithms,
+                modalities=modalities,
+            )
         scores = self.artifact.score(x)
         n_rows = len(scores)
         sample_ids = _default_list(sample_ids, n_rows)
@@ -320,6 +402,115 @@ class GuardrailRuntime:
                 )
             )
         return decisions
+
+    def _evaluate_or_features(
+        self,
+        features: np.ndarray,
+        *,
+        sample_ids: list[str | None] | None,
+        request_ids: list[str | None] | None,
+        prompt_hashes: list[str | None] | None,
+        image_hashes: list[tuple[str, ...]] | None,
+        prompt_hmac_hashes: list[str | None] | None,
+        image_hmac_hashes: list[tuple[str, ...]] | None,
+        fingerprint_algorithms: list[str | None] | None,
+        modalities: list[str | None] | None,
+    ) -> list[GuardrailDecision]:
+        assert isinstance(self.artifact, OrDetector)
+        scores = self.artifact.score_heads(features)
+        n_rows = len(next(iter(scores.values())))
+        sample_ids = _default_list(sample_ids, n_rows)
+        request_ids = _default_list(request_ids, n_rows)
+        prompt_hashes = _default_list(prompt_hashes, n_rows)
+        image_hashes = image_hashes or [tuple() for _ in range(n_rows)]
+        prompt_hmac_hashes = _default_list(prompt_hmac_hashes, n_rows)
+        image_hmac_hashes = image_hmac_hashes or [tuple() for _ in range(n_rows)]
+        fingerprint_algorithms = _default_list(fingerprint_algorithms, n_rows)
+        modalities = _default_list(modalities, n_rows)
+        for values, name in (
+            (sample_ids, "sample_ids"),
+            (request_ids, "request_ids"),
+            (prompt_hashes, "prompt_hashes"),
+            (image_hashes, "image_hashes"),
+            (prompt_hmac_hashes, "prompt_hmac_hashes"),
+            (image_hmac_hashes, "image_hmac_hashes"),
+            (fingerprint_algorithms, "fingerprint_algorithms"),
+            (modalities, "modalities"),
+        ):
+            _require_length(values, n_rows, name)
+        return [
+            self._or_decision_from_scores(
+                scores={name: float(values[index]) for name, values in scores.items()},
+                sample_id=sample_ids[index],
+                request_id=request_ids[index],
+                prompt_sha256=prompt_hashes[index],
+                image_sha256=image_hashes[index],
+                prompt_hmac_sha256=prompt_hmac_hashes[index],
+                image_hmac_sha256=image_hmac_hashes[index],
+                fingerprint_algorithm=(
+                    fingerprint_algorithms[index]
+                    or ("sha256" if prompt_hashes[index] is not None else None)
+                ),
+                modality=modalities[index],
+            )
+            for index in range(n_rows)
+        ]
+
+    def _or_decision_from_scores(self, *, scores: dict[str, float], **metadata) -> GuardrailDecision:
+        assert isinstance(self.artifact, OrDetector)
+        head_rows: list[dict[str, object]] = []
+        ranked: list[tuple[int, float, str, dict[str, object]]] = []
+        for head in self.artifact.ordered_heads:
+            score = scores[head.name]
+            block = float(head.artifact.threshold)
+            review = float(head.review_threshold)
+            if score >= block:
+                action, verdict, uncertain = "block", "malicious", False
+                progress = (score - block) / (1.0 - block)
+                rank = 2
+            elif score >= review:
+                action, verdict, uncertain = "review", "benign", True
+                progress = (score - review) / (block - review)
+                rank = 1
+            else:
+                action, verdict, uncertain = "allow", "benign", False
+                progress = score / review if review > 0.0 else 0.0
+                rank = 0
+            row = {
+                "name": head.name,
+                "verdict": verdict,
+                "risk_score": score,
+                "threshold": block,
+                "review_threshold": review,
+                "uncertain": uncertain,
+                "recommended_action": action,
+                "pooling": head.artifact.pooling,
+                "detector_source": head.artifact.source,
+            }
+            head_rows.append(row)
+            ranked.append((rank, progress, head.name, row))
+        winning_rank = max(item[0] for item in ranked)
+        candidates = [item for item in ranked if item[0] == winning_rank]
+        decisive = sorted(candidates, key=lambda item: (-item[1], item[2]))[0][3]
+        action = str(decisive["recommended_action"])
+        reasons = (f"or_head_{action}:{decisive['name']}",)
+        return GuardrailDecision(
+            action=action,
+            verdict="malicious" if action == "block" else "benign",
+            risk_score=float(decisive["risk_score"]),
+            threshold=float(decisive["threshold"]),
+            review_threshold=float(decisive["review_threshold"]),
+            uncertain=action == "review",
+            reasons=reasons,
+            model_family=self.artifact.model_family,
+            model_id=self.artifact.model_id,
+            pooling=self.artifact.pooling,
+            detector_source=self.artifact.source,
+            detector_mode=self.artifact.mode,
+            decisive_head=str(decisive["name"]),
+            head_decisions=tuple(head_rows),
+            **metadata,
+        )
 
     def evaluate_metadata_features(
         self,
@@ -415,7 +606,7 @@ class GuardrailRuntime:
         if not self.policy.require_matching_provenance:
             return
         mismatches = []
-        names = ["model_family", "model_id", "pooling"]
+        names = ["model_family", "model_id", "layer", "pooling"]
         names.extend(
             name
             for name in ("model_revision", "tokenizer_revision", "preprocessing_sha256")
@@ -503,11 +694,14 @@ def resolve_fingerprint_key(policy: GuardrailPolicy) -> bytes | None:
     if policy.fingerprint_key_env is None:
         return None
     value = os.getenv(policy.fingerprint_key_env)
-    if value is None or not value:
-        raise ValueError(
-            f"Fingerprint HMAC key environment variable is missing: "
-            f"{policy.fingerprint_key_env}"
-        )
+    _, problems = validate_secret(
+        value,
+        name=f"Fingerprint HMAC key ({policy.fingerprint_key_env})",
+        required=True,
+    )
+    if problems:
+        raise ValueError(" ".join(problems))
+    assert value is not None
     return value.encode("utf-8")
 
 

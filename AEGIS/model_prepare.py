@@ -32,6 +32,7 @@ def prepare_target_model(
         inspection_path,
         model_family=profile.model_family,
         revision=_integrity_revision(profile),
+        expected_content_sha256=profile.model_source.expected_content_sha256,
     )
     dependency_available = importlib.util.find_spec("huggingface_hub") is not None
     disk = _disk_preflight(destination, profile)
@@ -67,6 +68,7 @@ def prepare_target_model(
         after_path,
         model_family=profile.model_family,
         revision=_integrity_revision(profile),
+        expected_content_sha256=profile.model_source.expected_content_sha256,
     )
     if download and not bool(after["ok"]):
         raise RuntimeError(

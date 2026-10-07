@@ -11,6 +11,7 @@ import pandas as pd
 from PIL import Image
 
 from AEGIS.provenance import preprocessing_fingerprint
+from AEGIS.adapters.common import read_prompt_metadata
 
 
 PoolingMode = Literal["last_token", "mean_tokens", "text_tokens", "image_tokens"]
@@ -82,7 +83,7 @@ def _extract_arrays(
     config: LlavaOnevisionExtractionConfig,
     poolings: Sequence[PoolingMode],
 ) -> tuple[dict[PoolingMode, list[np.ndarray]], list[str]]:
-    metadata = pd.read_csv(metadata_path)
+    metadata = read_prompt_metadata(metadata_path)
     if "sample_id" not in metadata or "text" not in metadata:
         raise ValueError("Metadata must contain 'sample_id' and 'text' columns.")
     if "image_path" not in metadata:
