@@ -1,12 +1,12 @@
 {
-  "artifact_set_sha256": "dfb80231419d071b23238fb77d4fa0c4dfd99f0599fa3ec0a21129ee9d345952",
+  "artifact_set_sha256": "80f3f2351acbee07989815f4d71551cacacfc3e57669f11e62a575ddc6ed9f09",
   "file_count": 123,
   "files": [
     {
-      "bytes": 13381,
+      "bytes": 13325,
       "hash_mode": "normalized_lf",
       "path": "README.md",
-      "sha256": "5a6d11f1084338d4773659145cb4fd443cebf30934617227332915a20d03b583"
+      "sha256": "a09001926032ec784b8519eb72cc68da91e262b1d591ad922b9e4171ee11f808"
     },
     {
       "bytes": 4030,
@@ -375,16 +375,16 @@
       "sha256": "4cf047690e75ffcae2bb4fa90170161429ed5f914073b433e50913cf378754f7"
     },
     {
-      "bytes": 581,
+      "bytes": 524,
       "hash_mode": "normalized_lf",
       "path": "ci/README.md",
-      "sha256": "08aff1669ac7e097c19210bf738bbffa5f4c72614ab10d9e1e0f33523a12b774"
+      "sha256": "c2195a5ec766ffe7772220f404557c8f113d524aeffe141e57d8c5f38c50e777"
     },
     {
-      "bytes": 1122,
+      "bytes": 927,
       "hash_mode": "normalized_lf",
       "path": "ci/run_checks.py",
-      "sha256": "100addc550c1b49cc65fd0ab3f0d2fa0197299f7b1f40469a4c32638a231c8d9"
+      "sha256": "bb9986d862f9face4b141e0de76b8b38a0577786ecaebbc876ed9a767b6a1658"
     },
     {
       "bytes": 355,
@@ -745,5 +745,5 @@
   "root": "deliverables",
   "schema_version": 3,
   "text_hash_mode": "utf8_bom_removed_newlines_normalized_to_lf",
-  "total_bytes": 3062546
+  "total_bytes": 3062238
 }

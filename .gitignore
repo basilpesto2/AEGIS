@@ -11,6 +11,7 @@ dist/
 models/huggingface/
 outputs/
 /tmp/
+/tests/
 deliverables/**/runs/
 
 /FYP Report/

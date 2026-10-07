@@ -12,7 +12,7 @@ current partial v7 runtime-validation record and the historical v6 record.
 | `red_teaming/` | Safety-redacted variant generation and bounded detector-evasion evaluation. | Tools only; no detector robustness result is committed. |
 | `ablation_report/` | Executable signal-importance, low-label, uncertainty, and transfer-analysis workflow. | Tools only; reports must be generated from an explicitly supplied current feature bundle. |
 | `runtime_validation/` | Current 2026-08-30 v7 and historical 2026-08-29 v6 Compose/CUDA validation records. | Functional validation only; the v7 record is partial, the v6 record is superseded, and neither is an accuracy, robustness, latency, or capacity benchmark. |
-| `ci/` | Root product regression tests, research-tool unit tests, and deliverable-integrity verification. | Functional and artifact-integrity checks; not a model-accuracy benchmark. |
+| `ci/` | Research-tool unit tests and deliverable-integrity verification. | Functional and artifact-integrity checks; not a model-accuracy benchmark. |
 
 ## Current runtime relationship
 
@@ -85,8 +85,7 @@ From the repository root, using Python 3.10 or newer:
 python deliverables/ci/run_checks.py
 ```
 
-This runs the root product regression suite, research-pipeline unit tests, and a
-read-only integrity check. Use
+This runs the research-pipeline unit tests followed by a read-only integrity check. Use
 `python deliverables/verify_deliverables.py --update` only after a reviewed
 deliverable change.
 

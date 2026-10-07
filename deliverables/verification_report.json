@@ -1,5 +1,5 @@
 {
-  "artifact_set_sha256": "dfb80231419d071b23238fb77d4fa0c4dfd99f0599fa3ec0a21129ee9d345952",
+  "artifact_set_sha256": "80f3f2351acbee07989815f4d71551cacacfc3e57669f11e62a575ddc6ed9f09",
   "checks": [
     {
       "detail": [
@@ -442,7 +442,7 @@
       "passed": true
     },
     {
-      "detail": "dfb80231419d071b23238fb77d4fa0c4dfd99f0599fa3ec0a21129ee9d345952",
+      "detail": "80f3f2351acbee07989815f4d71551cacacfc3e57669f11e62a575ddc6ed9f09",
       "name": "manifest_update_round_trip",
       "passed": true
     }
@@ -453,14 +453,14 @@
   "current_runtime_record_sha256": "0496760f8d69a1c4c306622b4d139b18302311231e87074c008435ead5d20b7c",
   "current_runtime_validation_date": "2026-08-30",
   "current_runtime_validation_status": "partial",
-  "generated_at_utc": "2026-10-07T11:35:46Z",
+  "generated_at_utc": "2026-10-07T11:49:34Z",
   "historical_runtime_record_classification": "historical_superseded",
   "historical_runtime_record_sha256": "c3a48c987a6ae083361d4125b7541c0d19d5c29bcfcb882eb7240292fca4fcdf",
   "historical_runtime_validation_date": "2026-08-29",
   "historical_runtime_validation_status": "partial",
   "manifest_files": 123,
-  "manifest_sha256": "80373aa007b0a388b6aa09ec1e78ab4c74916cdc375221507145466e077d6c4e",
-  "manifest_total_canonical_bytes": 3062546,
+  "manifest_sha256": "6049e7bcd9d784563249d96136388e1f2a83ed177afb24fc9620da92dcc98c6f",
+  "manifest_total_canonical_bytes": 3062238,
   "package_version": "0.3.0",
   "schema_version": 6,
   "scope": "current_aegis_deliverables",
