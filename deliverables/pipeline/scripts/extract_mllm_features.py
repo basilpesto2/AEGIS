@@ -47,6 +47,17 @@ def main() -> None:
     parser.add_argument("--tokenizer-revision")
     parser.add_argument("--cache-dir", default="models/huggingface")
     parser.add_argument("--layer", type=int, default=-1)
+    parser.add_argument("--min-pixels", type=int)
+    parser.add_argument("--max-pixels", type=int)
+    parser.add_argument(
+        "--pooling",
+        choices=("image_tokens", "text_tokens", "text_image_tokens"),
+        default="image_tokens",
+        help=(
+            "Primary representation recorded in bundle provenance. "
+            "text_image_tokens concatenates text-token and image-token embeddings."
+        ),
+    )
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument("--force", action="store_true", help="Replace files in a non-empty output directory.")
     args = parser.parse_args()
@@ -55,6 +66,23 @@ def main() -> None:
             "--model-revision and --tokenizer-revision are required for "
             "provenance-complete MLLM extraction"
         )
+    if args.model_family == "qwen25_vl" and args.runtime_model_id:
+        parser.error("--runtime-model-id is supported only for llava_onevision")
+    if args.model_family == "llava_onevision" and (
+        args.min_pixels is not None or args.max_pixels is not None
+    ):
+        parser.error("--min-pixels and --max-pixels apply only to qwen25_vl")
+    if any(
+        value is not None and value <= 0
+        for value in (args.min_pixels, args.max_pixels)
+    ):
+        parser.error("--min-pixels and --max-pixels must be positive")
+    if (
+        args.min_pixels is not None
+        and args.max_pixels is not None
+        and args.min_pixels > args.max_pixels
+    ):
+        parser.error("--min-pixels cannot exceed --max-pixels")
     if args.output_dir.exists() and any(args.output_dir.iterdir()) and not args.force:
         raise FileExistsError(
             f"refusing to overwrite non-empty output directory: {args.output_dir}; "
@@ -63,10 +91,25 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows = _read_rows(args.metadata)
     id_column = _id_column(rows[0])
-    if args.model_family == "llava_onevision":
+    if args.pooling == "text_image_tokens" and any(
+        not row.get("image_path", "").strip() for row in rows
+    ):
+        raise ValueError(
+            "text_image_tokens extraction requires one image_path for every row"
+        )
+    if args.model_family == "llava_onevision" or args.pooling == "image_tokens":
         rows = [row for row in rows if row.get("image_path", "").strip()]
         if not rows:
-            raise ValueError("LLaVA extraction requires at least one image-text row")
+            raise ValueError(
+                f"{args.model_family} {args.pooling} extraction requires at least "
+                "one image-text row"
+            )
+    if args.pooling == "text_image_tokens" and any(
+        not row.get("prompt_text", "").strip() for row in rows
+    ):
+        raise ValueError(
+            "text_image_tokens extraction requires non-empty prompt_text for every row"
+        )
     aligned_source = args.output_dir / "aligned_source_metadata.csv"
     adapted = args.output_dir / "aligned_metadata.csv"
     masked = args.output_dir / "aligned_metadata_masked.csv"
@@ -75,27 +118,40 @@ def main() -> None:
     _write_adapter_metadata(masked, rows, id_column=id_column, mask=True)
 
     if args.model_family == "qwen25_vl":
-        if args.runtime_model_id:
-            parser.error("--runtime-model-id is supported only for llava_onevision")
         config = Qwen25VLExtractionConfig(
             model_id=args.model_id or "Qwen/Qwen2.5-VL-3B-Instruct",
             model_revision=args.model_revision,
             tokenizer_revision=args.tokenizer_revision,
             cache_dir=args.cache_dir,
             layer=args.layer,
+            min_pixels=args.min_pixels,
+            max_pixels=args.max_pixels,
             local_files_only=args.local_files_only,
         )
-        text_path = extract_qwen25_vl_pooling_embeddings(
-            adapted, args.corpus_root, args.output_dir / "raw", ["text_tokens"], config, "original"
-        )["text_tokens"]
+        qwen_poolings = (
+            ["text_tokens", "image_tokens"]
+            if args.pooling == "text_image_tokens"
+            else ["text_tokens"]
+        )
+        qwen_paths = extract_qwen25_vl_pooling_embeddings(
+            adapted,
+            args.corpus_root,
+            args.output_dir / "raw",
+            qwen_poolings,
+            config,
+            "original",
+        )
+        text_path = qwen_paths["text_tokens"]
         masked_path = extract_qwen25_vl_pooling_embeddings(
             masked, args.corpus_root, args.output_dir / "raw", ["text_tokens"], config, "masked"
         )["text_tokens"]
         image_rows = [row for row in rows if row.get("image_path", "").strip()]
         image_embeddings = None
         image_ids: list[str] = []
-        image_path = None
-        if image_rows:
+        image_path = qwen_paths.get("image_tokens")
+        if image_path is not None:
+            image_embeddings, image_ids = _read_adapter_npz(image_path)
+        elif image_rows:
             image_metadata = args.output_dir / "aligned_metadata_images.csv"
             _write_adapter_metadata(
                 image_metadata,
@@ -131,19 +187,45 @@ def main() -> None:
     masked_embeddings, masked_ids = _read_adapter_npz(masked_path)
     if sample_ids != masked_ids:
         raise ValueError("masked extraction IDs do not align with original extraction")
-    embedding_provenance = _read_embedding_provenance(text_path)
+    if args.pooling == "text_image_tokens" and sample_ids != image_ids:
+        raise ValueError("fused image extraction IDs do not align with text extraction")
+    text_provenance = _read_embedding_provenance(text_path)
+    image_provenance = (
+        _read_embedding_provenance(image_path)
+        if image_path is not None
+        else None
+    )
+    if args.pooling in {"image_tokens", "text_image_tokens"}:
+        if image_provenance is None:
+            raise ValueError(f"{args.pooling} extraction did not produce image embeddings")
+        if args.pooling == "text_image_tokens":
+            embedding_provenance = dict(text_provenance)
+            embedding_provenance["pooling"] = "text_image_tokens"
+        else:
+            embedding_provenance = image_provenance
+    else:
+        if args.min_pixels is not None or args.max_pixels is not None:
+            parser.error("--min-pixels and --max-pixels apply only to qwen25_vl")
+        embedding_provenance = text_provenance
     _require_matching_embedding_provenance(
         embedding_provenance,
         _read_embedding_provenance(masked_path),
         "masked extraction",
+        allow_pooling_difference=(args.pooling != "text_tokens"),
     )
-    if image_path is not None:
+    if image_provenance is not None:
         _require_matching_embedding_provenance(
             embedding_provenance,
-            _read_embedding_provenance(image_path),
+            image_provenance,
             "image extraction",
             allow_pooling_difference=True,
         )
+    _require_matching_embedding_provenance(
+        embedding_provenance,
+        text_provenance,
+        "text extraction",
+        allow_pooling_difference=(args.pooling != "text_tokens"),
+    )
     if image_embeddings is None:
         aligned_images = np.zeros_like(text_embeddings)
     else:
@@ -174,7 +256,12 @@ def main() -> None:
     bundle_preparation = {
         "adapter": args.model_family,
         "layer": args.layer,
-        "pooling": ["text_tokens", "image_tokens"],
+        "selected_pooling": args.pooling,
+        "available_pooling_views": [
+            "text_tokens",
+            "image_tokens",
+            "text_image_tokens",
+        ],
         "attribution": "fixed_instruction_word_masking",
         "mask_words": list(MASK_WORDS),
         "corpus_metadata_sha256": _sha256(args.metadata),
@@ -198,8 +285,17 @@ def main() -> None:
         "masked_embedding_source": _portable_path(masked_path),
         "attribution_method": "aggregate hidden-state delta after fixed instruction-word masking",
         "mask_words": list(MASK_WORDS),
-        "available_pooling_views": ["text_tokens", "image_tokens"],
-        "embedding_dimension": int(text_embeddings.shape[1]),
+        "available_pooling_views": [
+            "text_tokens",
+            "image_tokens",
+            "text_image_tokens",
+        ],
+        "component_embedding_dimension": int(text_embeddings.shape[1]),
+        "embedding_dimension": int(
+            text_embeddings.shape[1] * 2
+            if args.pooling == "text_image_tokens"
+            else text_embeddings.shape[1]
+        ),
         "bundle_preparation": bundle_preparation,
         "bundle_preparation_sha256": hashlib.sha256(
             json.dumps(
@@ -216,7 +312,14 @@ def main() -> None:
             "python": platform.python_version(),
             "numpy": np.__version__,
         },
-        "scope_note": "LLaVA output contains image-text rows only because the adapter requires an image.",
+        "scope_note": (
+            "Fused output contains image-text rows with non-empty text and records "
+            "the concatenated text-token and image-token representation."
+            if args.pooling == "text_image_tokens"
+            else "Image-token output contains image-text rows only."
+            if args.pooling == "image_tokens"
+            else "LLaVA text-token output remains image-text only because its adapter requires an image."
+        ),
     }
     (args.output_dir / "feature_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(manifest, indent=2, sort_keys=True))

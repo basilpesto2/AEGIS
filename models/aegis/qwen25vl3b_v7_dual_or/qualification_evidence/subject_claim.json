@@ -1,0 +1,45 @@
+{
+  "claim_path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/.frozen_evaluation_once_generic_v4-claims/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.json",
+  "claimed_utc": "2026-08-30T05:33:38.469293+00:00",
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "promotable": true,
+  "qualification_subject": {
+    "action_contract": {
+      "composition": "block if either head blocks; review if neither blocks and either head reviews; otherwise allow",
+      "per_head": "block when score >= artifact threshold; review when below block and score >= max(0, threshold - uncertainty_margin); otherwise allow"
+    },
+    "corpus_manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+    "image_artifact_sha256": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+    "ordered_case_identity_sha256": "231fcd2819c73dbb7edce2dcf8df8a9c2f57f8775945a61f2c99d2cb6672107c",
+    "pair_identity_sha256": "b6433ce4d465a1d2ca45abe1317f917231312be9bbc23d623b3ed2bb94c6c630",
+    "panel_counts": {
+      "external_benign": 20,
+      "regression": 20,
+      "text_led": 10
+    },
+    "panel_order": [
+      "regression",
+      "text_led",
+      "external_benign"
+    ],
+    "protocol_version": "schema4-dual-head-frozen-once-generic-v4",
+    "runtime_detector_identity_sha256": "960f53c6fa3e584bfd2ff16a6ec3cd2d54f592e640e32da55748c2b8facd3a8e",
+    "schema_version": 1,
+    "shared_provenance": {
+      "base_feature_dim": 2048,
+      "layer": -1,
+      "model_family": "qwen25_vl",
+      "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+      "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+      "preprocessing_sha256": "89b0197600695f79dc72e49b1f25a9c8e1b039eee6e1b51be2ae8d9c4b6b86e5",
+      "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3"
+    },
+    "target": "qwen25vl3b",
+    "text_artifact_sha256": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8"
+  },
+  "qualification_subject_sha256": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181",
+  "schema_version": 1,
+  "target": "qwen25vl3b",
+  "trust_boundary": "single local attempt while this append-only claim ledger is preserved; not external attestation against a privileged filesystem owner",
+  "workspace": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181"
+}

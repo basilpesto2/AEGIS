@@ -1,0 +1,82 @@
+{
+  "aligned_source_metadata": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/extracted_features/aligned_source_metadata.csv",
+  "aligned_source_metadata_sha256": "f8e0739f2a45eb4d031e720acb4e199097bbf4d93e625b6b811c997ea838ac42",
+  "attribution_method": "aggregate hidden-state delta after fixed instruction-word masking",
+  "available_pooling_views": [
+    "text_tokens",
+    "image_tokens",
+    "text_image_tokens"
+  ],
+  "bundle_preparation": {
+    "adapter": "qwen25_vl",
+    "attribution": "fixed_instruction_word_masking",
+    "available_pooling_views": [
+      "text_tokens",
+      "image_tokens",
+      "text_image_tokens"
+    ],
+    "corpus_metadata_sha256": "f8e0739f2a45eb4d031e720acb4e199097bbf4d93e625b6b811c997ea838ac42",
+    "layer": -1,
+    "mask_words": [
+      "ignore",
+      "override",
+      "follow",
+      "execute",
+      "provide",
+      "reveal",
+      "output",
+      "comply"
+    ],
+    "selected_pooling": "text_image_tokens"
+  },
+  "bundle_preparation_sha256": "5330943a6d57b987f5dbf59d20f7652757057542e443881e117bb3e8c9e250d8",
+  "component_embedding_dimension": 2048,
+  "config": {
+    "add_generation_prompt": false,
+    "cache_dir": "/app/models/huggingface",
+    "device_map": "auto",
+    "layer": -1,
+    "local_files_only": true,
+    "max_pixels": 200704,
+    "max_samples": null,
+    "min_pixels": null,
+    "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "pooling": "last_token",
+    "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "torch_dtype": "auto"
+  },
+  "embedding_dimension": 4096,
+  "feature_bundle": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/extracted_features/feature_bundle.npz",
+  "feature_bundle_sha256": "5a0e098b1dd5348dfc3c608af854030d11ad480c341f67a50f1dfb27ea645f33",
+  "id_column": "sample_id",
+  "image_embedding_source": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/extracted_features/raw/original_layer_m1_image_tokens.npz",
+  "layer": -1,
+  "mask_words": [
+    "ignore",
+    "override",
+    "follow",
+    "execute",
+    "provide",
+    "reveal",
+    "output",
+    "comply"
+  ],
+  "masked_embedding_source": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/extracted_features/raw/masked_layer_m1_text_tokens.npz",
+  "metadata": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/metadata/ordered_frozen_metadata.csv",
+  "metadata_sha256": "f8e0739f2a45eb4d031e720acb4e199097bbf4d93e625b6b811c997ea838ac42",
+  "model_family": "qwen25_vl",
+  "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+  "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+  "pooling": "text_image_tokens",
+  "preprocessing_sha256": "89b0197600695f79dc72e49b1f25a9c8e1b039eee6e1b51be2ae8d9c4b6b86e5",
+  "rows": 50,
+  "schema_version": 2,
+  "scope_note": "Fused output contains image-text rows with non-empty text and records the concatenated text-token and image-token representation.",
+  "text_embedding_source": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/extracted_features/raw/original_layer_m1_text_tokens.npz",
+  "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+  "toolchain": {
+    "numpy": "2.4.4",
+    "python": "3.11.15"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "evaluator_sha256": "93493c06828abf7e4a0981ff589ae933c439fd127b670d53d93cb2ce58e91ad1",
+  "execution_ordinal": 1,
+  "extractor_sha256": "b00c374b6ee1cbc7cd3a069c4f57f1bbbaf4bfcf1a6a5886fa4d09617178e34c",
+  "implementation_manifest_sha256": "276bbdcdc06984ecd5ae238b7135ec6ab0fe31793fa9d7c69cb7840ded4540c0",
+  "input_snapshot_manifest_sha256": "0940f362e13a2bfc2ced154db1f3dbd5811e4242451e161adfcf48d62cdb1fe9",
+  "model_snapshot_manifest_sha256": "e336e92146f9d54030fc084ee9376c6326da5207231409440a2f22b80ee4d16f",
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "protocol_id": "qwen25vl3b-schema4-dual-head-frozen-once-generic-v4",
+  "protocol_sha256": "2d126ad9693fdc41c5eca8bf689df4501600cac8051c838efdbe18d1262c6395",
+  "qualification_execution": "atomic_extract_evaluate",
+  "qualification_subject_sha256": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181",
+  "retries_permitted": false,
+  "schema_version": 1,
+  "started_utc": "2026-08-30T05:34:51.085423+00:00",
+  "subject_claim_sha256": "5c35f475ff9bec6904bdf0ab07e9b681b4322779164231775cae5387e13aba9a"
+}

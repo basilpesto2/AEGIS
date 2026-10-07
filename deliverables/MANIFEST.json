@@ -1,24 +1,24 @@
 {
-  "artifact_set_sha256": "66302992a73a1d5f218f256bfff06bf0b6357353a9d8b9c4acc697ac8611c3f2",
-  "file_count": 90,
+  "artifact_set_sha256": "dfb80231419d071b23238fb77d4fa0c4dfd99f0599fa3ec0a21129ee9d345952",
+  "file_count": 123,
   "files": [
     {
-      "bytes": 4397,
+      "bytes": 13381,
       "hash_mode": "normalized_lf",
       "path": "README.md",
-      "sha256": "58b7e2c4491f568653defbb1515373128078954717b51f645f2ee59d271323d1"
+      "sha256": "5a6d11f1084338d4773659145cb4fd443cebf30934617227332915a20d03b583"
     },
     {
-      "bytes": 1667,
+      "bytes": 4030,
       "hash_mode": "normalized_lf",
       "path": "ablation_report/README.md",
-      "sha256": "b987d4b942600ccd93b03d2e512772d3a3bd9d2e68a01061b4473d620ef40735"
+      "sha256": "4d308d1f048421a85842a2c3734a981940257e84b7bc59d07864e23c99f00a0c"
     },
     {
-      "bytes": 27971,
+      "bytes": 83407,
       "hash_mode": "normalized_lf",
       "path": "ablation_report/run_ablation.py",
-      "sha256": "1295d02efeb9437fa82ad27e32594278245d855b3289f347c26dfe8120c2ad24"
+      "sha256": "9a64c7ff16cf307766ee1f1e0c363a825272531d45900a25b8ec84d38654fb6e"
     },
     {
       "bytes": 2110,
@@ -33,16 +33,16 @@
       "sha256": "9272a606cf737aea823267edf2916ef2c4a9294f3093534ad9dc47117ae278d7"
     },
     {
-      "bytes": 1177,
+      "bytes": 1518,
       "hash_mode": "normalized_lf",
       "path": "benchmark/README.md",
-      "sha256": "404136634d82af9bfaa47f5afd3eed04d7e430713656c8aca57524a0f9c9081b"
+      "sha256": "c3978a024085ea899f800da207a232f2099e6fd630f11d5508dacd62d94dd63c"
     },
     {
-      "bytes": 24284,
+      "bytes": 24277,
       "hash_mode": "raw",
       "path": "benchmark/benchmark.xlsx",
-      "sha256": "86aa35480bbefe3b46ebe172420ad57855e00f82f35d9d5cffb2d30bd0f747f1"
+      "sha256": "37a77a1bffe931afe4e71c59e542c494ce5c185a09240927b6b8839dd11851d9"
     },
     {
       "bytes": 20427,
@@ -51,10 +51,10 @@
       "sha256": "990ad14fcf391c816cc32da31cb4a1ec7a1b9ab16f0d1f9de83c0710caccdfaa"
     },
     {
-      "bytes": 10173,
+      "bytes": 10178,
       "hash_mode": "normalized_lf",
       "path": "benchmark/build_workbook.mjs",
-      "sha256": "72e755d66d881d6bae82ffaf0a95867a9de39b6d45dd9c925721ee0e8a339baa"
+      "sha256": "ef34abe5c483bb3fcd8bea54208eb8a1c1702f7c26be0f3da5d23e20d6206ac9"
     },
     {
       "bytes": 741,
@@ -357,16 +357,16 @@
       "sha256": "fad05b311aafcfd801f5729e961cfca2e4b712c292b62d604a38d29254e6b31d"
     },
     {
-      "bytes": 62561,
+      "bytes": 62515,
       "hash_mode": "raw",
       "path": "benchmark/qa/summary.png",
-      "sha256": "b6a6401513e0c075f3f6dd7077428ee81ab3cefaaffa2d228f45f876a029e1f8"
+      "sha256": "8b102859002814eaac61052355fe147804d79900da2bd923b54ce86f3095da6f"
     },
     {
-      "bytes": 1550,
+      "bytes": 1555,
       "hash_mode": "normalized_lf",
       "path": "benchmark/qa/workbook_inspect.ndjson",
-      "sha256": "5cd7130bc02b97fd26938b61bf91de38d0eb93a35a185880b53ab57af7048b2f"
+      "sha256": "0b3ab962fd2aa5033387f2cbba34f493518baa4afdedda99fb3fb4f8f4edd06d"
     },
     {
       "bytes": 2834,
@@ -375,16 +375,16 @@
       "sha256": "4cf047690e75ffcae2bb4fa90170161429ed5f914073b433e50913cf378754f7"
     },
     {
-      "bytes": 537,
+      "bytes": 581,
       "hash_mode": "normalized_lf",
       "path": "ci/README.md",
-      "sha256": "e669a4ac16543b2d1c1ec07da8d4862181f76d580198db20c612c69a9eb9bfd9"
+      "sha256": "08aff1669ac7e097c19210bf738bbffa5f4c72614ab10d9e1e0f33523a12b774"
     },
     {
-      "bytes": 927,
+      "bytes": 1122,
       "hash_mode": "normalized_lf",
       "path": "ci/run_checks.py",
-      "sha256": "bb9986d862f9face4b141e0de76b8b38a0577786ecaebbc876ed9a767b6a1658"
+      "sha256": "100addc550c1b49cc65fd0ab3f0d2fa0197299f7b1f40469a4c32638a231c8d9"
     },
     {
       "bytes": 355,
@@ -393,16 +393,106 @@
       "sha256": "11384b19cc47cd254ebfc9b42e2f05cea037cc3df83842507e448e24b777a739"
     },
     {
-      "bytes": 4173,
+      "bytes": 25023,
       "hash_mode": "normalized_lf",
       "path": "pipeline/README.md",
-      "sha256": "4d4a0227c85ad36b828de169dbe3a9c8bcaaf5bb9cfef829a33f1a1e32a1cb51"
+      "sha256": "3150d4b492e03e8aa84d6ec8ad2c803614946b9fa0a7529c77e2c7e3022dd12a"
     },
     {
       "bytes": 390,
       "hash_mode": "normalized_lf",
       "path": "pipeline/aegis_research/__init__.py",
       "sha256": "7e2bf74941d99a37b5f09b2a01ba46ecb190b97a99ff440fbbb189b1943a46fe"
+    },
+    {
+      "bytes": 67670,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_corpus.py",
+      "sha256": "20a69761ae93df0d6c3d076cfdf5976e8fe5eebf5e2ae5b06a8deef77dab6c23"
+    },
+    {
+      "bytes": 85563,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_corpus_prepare.py",
+      "sha256": "ac24e346a57fc7f0569db340e36411ac83b3029f4c532a4de5fcfb3bb29393a2"
+    },
+    {
+      "bytes": 83241,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual.py",
+      "sha256": "858c3c92cfeafaec3c74e8a8decdc4d2e213d196afa941eca5fbeb71d78084f7"
+    },
+    {
+      "bytes": 42841,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_evaluation.py",
+      "sha256": "d3b7de4b9601d9a75c141d1a048bf9ed07a4bfcedee62b5f3244ba94a719767d"
+    },
+    {
+      "bytes": 18673,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_evaluation_validation.py",
+      "sha256": "d5cb2aa086084a93ba7c4d52c042a85d4ff9b336d0f1bf8c918d37092ffe40fa"
+    },
+    {
+      "bytes": 15355,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_promotion.py",
+      "sha256": "7a521f8bd8e0b3122740a44eab2a12002cadfd76546ade207524a806754c73a6"
+    },
+    {
+      "bytes": 15801,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_publish.py",
+      "sha256": "e5d9f6eaec3663de3c900ad0434489dec456bb598b1677c75ee648cc3d6a836a"
+    },
+    {
+      "bytes": 110535,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_qualification.py",
+      "sha256": "8cf4cf4727b5a10bf72a25d598dd9d9dea69b4e6640f259a704eace1928c9104"
+    },
+    {
+      "bytes": 42420,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_dual_training.py",
+      "sha256": "ab0eeb46686430072fd2d9d4a675f5f7218ad2964a70c4c3e96e76a4f1839189"
+    },
+    {
+      "bytes": 78202,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_evaluation.py",
+      "sha256": "06f41059ad895e9e679efb42084c0f53479c82d2d42e1f9afde1178e5e09d11d"
+    },
+    {
+      "bytes": 22391,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_evaluation_validation.py",
+      "sha256": "e06a36039f0b44e151bb6d9cea20119e56f5a03edfd0226f79256389cf75ac88"
+    },
+    {
+      "bytes": 2581,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_paths.py",
+      "sha256": "4fc902e73f710b43b5c6f9269a826f98dc5c45e1503f858d8bec08b2cead7e3e"
+    },
+    {
+      "bytes": 13283,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_promotion.py",
+      "sha256": "a55639b1d747a4558031c7f20c79ff90ab4022f9952abbf91d282c007e43d8ba"
+    },
+    {
+      "bytes": 3762,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_provenance.py",
+      "sha256": "7a002c8e554ff6ac02f1faeb6cf81cdb58874eca0612f3db8b0a58bc93f23b4c"
+    },
+    {
+      "bytes": 115114,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/aegis_research/bordair_training.py",
+      "sha256": "5141bb6b4fa74c458ad125e63b427adea361de30141891457f69bf8a0352e7e6"
     },
     {
       "bytes": 5559,
@@ -429,10 +519,10 @@
       "sha256": "b108712f229636aea2a613e141592014fa0b09f9749a2ea15197a75755cb9eb4"
     },
     {
-      "bytes": 2996,
+      "bytes": 3161,
       "hash_mode": "normalized_lf",
       "path": "pipeline/aegis_research/signals.py",
-      "sha256": "fc4546f663e9821b30043080508fa9f547b09ad022473b4a1392f2d2221d0383"
+      "sha256": "3172e2208b699ae5d1d1b8f099b479ed8f737b76d16ced07fa66a201c92a10c5"
     },
     {
       "bytes": 234,
@@ -453,16 +543,52 @@
       "sha256": "2f9c2373746a116bc6da037400dad5f94e2263533e73b3d5a66b4c048b99164c"
     },
     {
-      "bytes": 2570,
+      "bytes": 2758,
       "hash_mode": "normalized_lf",
       "path": "pipeline/schemas/feature_bundle.schema.json",
-      "sha256": "8a94c006400bc5e4a88b1575bc8347352cefd15a1878dc391ad79c8a20bdc138"
+      "sha256": "f27697e1f55c8ccb7eb860a68d5ac5d009d0d11e187f863ed06c6595270b4154"
     },
     {
-      "bytes": 16052,
+      "bytes": 5235,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/build_bordair_dual_pair_manifest.py",
+      "sha256": "0a49d227aaad5d8457c6ff2ba17414a76ebd51bef7a16f11543d1dd9b4ccbe0c"
+    },
+    {
+      "bytes": 289,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/evaluate_bordair_detector.py",
+      "sha256": "9a29a0b62367e927c7692be494af1fe83cb1883ac8b359dcda64a2709827ad36"
+    },
+    {
+      "bytes": 294,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/evaluate_bordair_dual_detector.py",
+      "sha256": "93493c06828abf7e4a0981ff589ae933c439fd127b670d53d93cb2ce58e91ad1"
+    },
+    {
+      "bytes": 20090,
       "hash_mode": "normalized_lf",
       "path": "pipeline/scripts/extract_mllm_features.py",
-      "sha256": "8c406c4eaa08125faf02c1f9f79bb56c3d6227598fef964755646e32cb955134"
+      "sha256": "8953bd2ed9c346cc2a3a4b807f944b0e2d433ff2fca439da26c719ce91b1383e"
+    },
+    {
+      "bytes": 275,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/prepare_bordair_corpus.py",
+      "sha256": "1c3ad4225ea878a08aa40af22b23e60a1000ae5d1eaacf38566fb258e946b50a"
+    },
+    {
+      "bytes": 371,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/prepare_bordair_dual_qualification.py",
+      "sha256": "e1481c38fdc3d2805c72fd4ec83166e4eff1eecaf830dc2a372eff87c3149711"
+    },
+    {
+      "bytes": 3216,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/publish_bordair_dual_pair.py",
+      "sha256": "9eea20459eb6b6eba4290da9815455d052a052322ee7b93f089d3ad7478a5ff2"
     },
     {
       "bytes": 7046,
@@ -471,22 +597,88 @@
       "sha256": "a3ed1711ac1b57e61c76785cda9ad2054c334117ab574a999d0f8d22e8e6d492"
     },
     {
-      "bytes": 10436,
+      "bytes": 23987,
       "hash_mode": "normalized_lf",
       "path": "pipeline/scripts/score_feature_bundle.py",
-      "sha256": "07adf806eb437eaa34bed3b376f8e487a55af9a8cc8a3ef6bcbde4477bdaff98"
+      "sha256": "adc2440cfc204845bf5d71e5bae1dd19d07a1727d29886f9892bb4fe37b06714"
     },
     {
-      "bytes": 2138,
+      "bytes": 269,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/train_bordair_detector.py",
+      "sha256": "a03ad1f9bc44eced03ce20dc235a3ca6b6dce004cbf348d69d02c355caac6673"
+    },
+    {
+      "bytes": 267,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/validate_bordair_corpus.py",
+      "sha256": "5fe367c9107d5cc748ace1ad001a74528db5e23628aeba2c348b037be6cc8168"
+    },
+    {
+      "bytes": 287,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/validate_bordair_dual_evaluation.py",
+      "sha256": "d7f47ac564fa4525bcc6b985d5b3feae78e11c1df658fa1c581dc587cd7d0d67"
+    },
+    {
+      "bytes": 275,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/validate_bordair_dual_promotion.py",
+      "sha256": "76e7d14381736436a39f02f1165ce84f298fe2d00a81edecc27f6ca69e26e79c"
+    },
+    {
+      "bytes": 282,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/validate_bordair_evaluation.py",
+      "sha256": "7cd4e38f8cf04bf0f8541980deff37954b34df6e90bb97fa098e69dfbd312a9a"
+    },
+    {
+      "bytes": 270,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/scripts/validate_bordair_promotion.py",
+      "sha256": "29c2ac7db930a4059f3c5a6534527b73c603dd903611b3010fb46d936dc1d85a"
+    },
+    {
+      "bytes": 18547,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/tests/test_bordair_dual_publish.py",
+      "sha256": "24438db10dd1429efcf8833819aab86d380643711a269494de0f44c0d530c86f"
+    },
+    {
+      "bytes": 90303,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/tests/test_bordair_dual_qualification.py",
+      "sha256": "bb195afc9423e1d884e1deba5c1f1db654af06e5b8debefdf7905ec39bb40b2d"
+    },
+    {
+      "bytes": 67272,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/tests/test_bordair_dual_workflow.py",
+      "sha256": "37aac4259d43548003274218649f45ce986a27d58f0c97885e95c7884fd9f0e2"
+    },
+    {
+      "bytes": 12463,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/tests/test_bordair_durable_workflow.py",
+      "sha256": "911c72f813211b3ad3ae28e0224dc1f07d28583a764896827a4b35ee15ca4861"
+    },
+    {
+      "bytes": 12914,
+      "hash_mode": "normalized_lf",
+      "path": "pipeline/tests/test_bordair_evaluation.py",
+      "sha256": "04aee8884bbb4af6db3a0a1d6d1b5eb31177a02d0857db68c640a63700093b8e"
+    },
+    {
+      "bytes": 24687,
       "hash_mode": "normalized_lf",
       "path": "pipeline/tests/test_pipeline.py",
-      "sha256": "6362fea329d5f2587ac65fab55d669d3b6230253349239768f1541b3743322d6"
+      "sha256": "d5eed06eb1a195683b524228e5bb2585ba362fee1a5e4f7afba1e22ccb7cee9b"
     },
     {
-      "bytes": 3346,
+      "bytes": 11018,
       "hash_mode": "normalized_lf",
       "path": "red_teaming/README.md",
-      "sha256": "3c26772e4a89dbfcd0a8a633a12d4369e4b1f45e556dba6c1ce0ceeb34ece3c9"
+      "sha256": "0d29d53b05d4d5f89505203c4324ea154648df9a05b98189dc07d7913acd03e2"
     },
     {
       "bytes": 1482,
@@ -501,10 +693,10 @@
       "sha256": "22132525bc284ee1bdb8103652163c26a1fcb3e29585e48d142af69216303ec7"
     },
     {
-      "bytes": 13320,
+      "bytes": 34509,
       "hash_mode": "normalized_lf",
       "path": "red_teaming/evaluate_adaptive.py",
-      "sha256": "eff4004b472d83b0601b4b4e2db9893c092ae3adcf2b9b3f619cca795e3bccb0"
+      "sha256": "3257756378557b73a67828af58d4bd275a4da411e20c89d4d048bb2f56dda9e1"
     },
     {
       "bytes": 7873,
@@ -525,27 +717,33 @@
       "sha256": "a70e716c9bf29c1ed8876874be8a6d1956c0d5d575a8d2ed49a59a178dce965e"
     },
     {
-      "bytes": 1921,
+      "bytes": 6359,
       "hash_mode": "normalized_lf",
       "path": "runtime_validation/README.md",
-      "sha256": "f52cd16ee001cd280c49034648c0f5f72576653f527755ed367a9eedd521fbb3"
+      "sha256": "7312e1e276f2813ce684d5b0b97a0687bd19e9712ffe1171b07531f21cef2d1f"
     },
     {
-      "bytes": 3287,
+      "bytes": 7434,
       "hash_mode": "normalized_lf",
-      "path": "runtime_validation/docker_smoke_2026-07-31.json",
-      "sha256": "18716e7dd91f448a163533ba594a1a6d186d0cf911670435434460969cb044fc"
+      "path": "runtime_validation/v6_compose_validation_2026-08-29.json",
+      "sha256": "c3a48c987a6ae083361d4125b7541c0d19d5c29bcfcb882eb7240292fca4fcdf"
     },
     {
-      "bytes": 38147,
+      "bytes": 8927,
+      "hash_mode": "normalized_lf",
+      "path": "runtime_validation/v7_compose_validation_2026-08-30.json",
+      "sha256": "0496760f8d69a1c4c306622b4d139b18302311231e87074c008435ead5d20b7c"
+    },
+    {
+      "bytes": 82593,
       "hash_mode": "normalized_lf",
       "path": "verify_deliverables.py",
-      "sha256": "7adecc69014254e448b60a6289c25417615353b7f797de15e87dfa96ab3edbf8"
+      "sha256": "117bc8ca35f7fa2bef8c82143c58394509dabb149c96d902c74c8f5a626be44a"
     }
   ],
   "hash_algorithm": "sha256",
   "root": "deliverables",
-  "schema_version": 2,
+  "schema_version": 3,
   "text_hash_mode": "utf8_bom_removed_newlines_normalized_to_lf",
-  "total_bytes": 1912805
+  "total_bytes": 3062546
 }

@@ -95,10 +95,12 @@
       "type": "integer"
     },
     "pooling": {
+      "description": "Primary representation provenance used for detector compatibility; text_image_tokens concatenates the text-token and image-token views",
       "type": "string",
       "enum": [
         "text_tokens",
-        "image_tokens"
+        "image_tokens",
+        "text_image_tokens"
       ]
     },
     "id_column": {

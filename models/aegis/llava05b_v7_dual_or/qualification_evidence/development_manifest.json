@@ -1,0 +1,46 @@
+{
+  "files": {
+    "README.md": {
+      "bytes": 2763,
+      "sha256": "ab9710207c27c6cfdc6b6523deaa6d1b4e5fc0556e2bc5bfff7c4d1417fc32bd"
+    },
+    "channel_pair_candidates.csv": {
+      "bytes": 272683,
+      "sha256": "52a8d36025a2e97d2cdc7ea0363421f3d2445dcf67f4aebb68b7e118641c409b"
+    },
+    "experiment_summary.json": {
+      "bytes": 19753,
+      "sha256": "723033a7969ad6579d39711c2e6874d45bdc67a67b7218f78253678705deb41a"
+    },
+    "fused_baseline_candidates.csv": {
+      "bytes": 4080,
+      "sha256": "dc18e8287652c7ae58dd8db4e663c0d06c78ea7805068d140a6d0ab8a3fc757c"
+    },
+    "image_head_fit_diagnostics.csv": {
+      "bytes": 3839,
+      "sha256": "df4644d51f418061806c6ea109376164faabcb95dd68147e9092b42c54083ecd"
+    },
+    "llava05b_schema4_image_head_v1.npz": {
+      "bytes": 28090,
+      "sha256": "84b12df0887f420318e2f3f530d0dc4391e8c1e1e5d1e15ff28f4f719c6b80b5"
+    },
+    "llava05b_schema4_text_head_v1.npz": {
+      "bytes": 28086,
+      "sha256": "cd8502fc73ecaf1e6597d318d63a82fcdf7abae628c1a54e5390b82b2a999a61"
+    },
+    "run_experiment.py": {
+      "bytes": 64889,
+      "sha256": "e6421186d85b8299b496176f3303529d99e997ee738f597d0acee837034a4156"
+    },
+    "selected_predictions.csv": {
+      "bytes": 63627,
+      "sha256": "1c9a51acf9cb01a6243453d28c27ba88327f2c3ec7e99f65226d88f6afc935f4"
+    },
+    "text_head_fit_diagnostics.csv": {
+      "bytes": 2807,
+      "sha256": "ad7f6bba195aec3ab7a66625cdb7940bafa6c300441b29072fe82666d9bef4bf"
+    }
+  },
+  "generated_utc": "2026-08-29T17:21:33.948608+00:00",
+  "schema_version": 1
+}

@@ -1,0 +1,219 @@
+{
+  "evaluation_manifest": {
+    "bytes": 9222,
+    "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/evaluation_manifest.json",
+    "sha256": "79ad862625d9145acb0444dcf8d02797e9ca99409f23d919e078b7b340f6aef5"
+  },
+  "evidence": {
+    "cache_entry_tree_sha256": "f7577b99b3f9e4cfff888fd9fa10f337be9d4fd880eb80a0f73065bc4e5864b7",
+    "corpus_manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+    "development_manifest_sha256": "1f181ee00f39cad7986f768cb7554c2485a5a54d5392315fb5d9efeab82e9952",
+    "image_artifact_sha256": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+    "protocol_sha256": "2d126ad9693fdc41c5eca8bf689df4501600cac8051c838efdbe18d1262c6395",
+    "results_csv": {
+      "bytes": 23584,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/dual_head_frozen_results.csv",
+      "sha256": "82e8ed30247616588b49f13eebcaae9f4108e56e00a2245c76ed9a43790302a1"
+    },
+    "results_json": {
+      "bytes": 118499,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/dual_head_frozen_results.json",
+      "sha256": "7d6136c850b672b5a4344ccb0f4fe2e114ecb47c6dca8b0f4844f7020b6def77"
+    },
+    "text_artifact_sha256": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8"
+  },
+  "gates": {
+    "checks": {
+      "external_benign_exact_counts": true,
+      "external_benign_fewer_than_3_blocked": true,
+      "fixed_benign_fewer_than_3_blocked": true,
+      "fixed_exact_counts": true,
+      "fixed_malicious_10_of_10_blocked": true,
+      "text_led_exact_counts": true,
+      "text_led_malicious_10_of_10_blocked": true
+    },
+    "passed": true
+  },
+  "generated_utc": "2026-08-30T05:37:18.891705+00:00",
+  "generic_sources": {
+    "aligned_source_metadata": {
+      "bytes": 26889,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/source_inputs/aligned_source_metadata.csv",
+      "sha256": "f8e0739f2a45eb4d031e720acb4e199097bbf4d93e625b6b811c997ea838ac42"
+    },
+    "cache_materialization": {
+      "bytes": 24522,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/cache_materialization.json",
+      "sha256": "9ad4cdb2f89ea83a6ea5eb05effa8a5a8c027b6acdfe9e4ec17c6047c9e03f96"
+    },
+    "declaration_manifest": {
+      "bytes": 5972,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/declaration_manifest.json",
+      "sha256": "edf17942f317c135d7fb803b034b067e934227073ba566ef3ef1b486b8805712"
+    },
+    "feature_bundle": {
+      "bytes": 826998,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/source_inputs/feature_bundle.npz",
+      "sha256": "5a0e098b1dd5348dfc3c608af854030d11ad480c341f67a50f1dfb27ea645f33"
+    },
+    "feature_manifest": {
+      "bytes": 3295,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/source_inputs/feature_manifest.json",
+      "sha256": "0c3d3e13701a46a079fcc98f296c6056ff2360d887b389c80129ce8e5512b0fe"
+    },
+    "generic_results_csv": {
+      "bytes": 41413,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/generic/dual_or_results.csv",
+      "sha256": "3ec05b12afe8ce604b31804f8f79aa9fe7eaf493b6f3870653daaa2e99ee602c"
+    },
+    "generic_results_json": {
+      "bytes": 87152,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/generic/dual_or_results.json",
+      "sha256": "f70019e858f76b3add4049dc9007e20e4a0991a0cbb0f49e9ac34cdb7e7f0dc3"
+    },
+    "generic_validation_report": {
+      "bytes": 3531,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/generic/dual_or_validation.json",
+      "sha256": "59d754f11acc0f4c9d5d20fd7523ae6788e50e3b62d7a080803654aec9b1c1ce"
+    },
+    "implementation_manifest": {
+      "bytes": 9742,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/implementation_manifest.json",
+      "sha256": "276bbdcdc06984ecd5ae238b7135ec6ab0fe31793fa9d7c69cb7840ded4540c0"
+    },
+    "input_snapshot_manifest": {
+      "bytes": 11347,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/input_snapshot_manifest.json",
+      "sha256": "0940f362e13a2bfc2ced154db1f3dbd5811e4242451e161adfcf48d62cdb1fe9"
+    },
+    "model_snapshot_manifest": {
+      "bytes": 5790,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/model_snapshot_manifest.json",
+      "sha256": "e336e92146f9d54030fc084ee9376c6326da5207231409440a2f22b80ee4d16f"
+    },
+    "runtime_environment": {
+      "bytes": 2924,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/runtime_environment.json",
+      "sha256": "303c1d427dcf34ce54d2694d4a15795e3b7f5549e786b937e71eecbdbe797477"
+    },
+    "source_pair_manifest": {
+      "bytes": 3856,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/source_inputs/detector_pair_manifest.json",
+      "sha256": "f44d931e19a39152ad91d0d619027ab6c36df8477de3a3c8be04cb0f2d7c9d98"
+    },
+    "strict_corpus_validation": {
+      "bytes": 1215,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/strict_corpus_validation.json",
+      "sha256": "83526b63571eeba23f37a5e343a919a89e6417f861a22307c704ce05671c5b3a"
+    },
+    "subject_claim": {
+      "bytes": 2468,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/subject_claim.json",
+      "sha256": "5c35f475ff9bec6904bdf0ab07e9b681b4322779164231775cae5387e13aba9a"
+    },
+    "training_summary": {
+      "bytes": 9694,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/.evidence-staging-1/source_inputs/training_summary.json",
+      "sha256": "14d67f62fd7e37d706dea8c8022aaadfacb28ee0458930b818154680a214a28a"
+    }
+  },
+  "ok": true,
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "panels": {
+    "external_benign": {
+      "benign_blocked": 2,
+      "benign_rows": 20,
+      "combined_action_counts": {
+        "allow": 18,
+        "block": 2,
+        "review": 0
+      },
+      "image_head_action_counts": {
+        "allow": 18,
+        "block": 2,
+        "review": 0
+      },
+      "malicious_blocked": 0,
+      "malicious_rows": 0,
+      "rows": 20,
+      "text_head_action_counts": {
+        "allow": 20,
+        "block": 0,
+        "review": 0
+      }
+    },
+    "regression": {
+      "benign_blocked": 2,
+      "benign_rows": 10,
+      "combined_action_counts": {
+        "allow": 8,
+        "block": 12,
+        "review": 0
+      },
+      "image_head_action_counts": {
+        "allow": 8,
+        "block": 12,
+        "review": 0
+      },
+      "malicious_blocked": 10,
+      "malicious_rows": 10,
+      "rows": 20,
+      "text_head_action_counts": {
+        "allow": 20,
+        "block": 0,
+        "review": 0
+      }
+    },
+    "text_led": {
+      "benign_blocked": 0,
+      "benign_rows": 0,
+      "combined_action_counts": {
+        "allow": 0,
+        "block": 10,
+        "review": 0
+      },
+      "image_head_action_counts": {
+        "allow": 8,
+        "block": 2,
+        "review": 0
+      },
+      "malicious_blocked": 10,
+      "malicious_rows": 10,
+      "rows": 10,
+      "text_head_action_counts": {
+        "allow": 0,
+        "block": 10,
+        "review": 0
+      }
+    }
+  },
+  "promotable": true,
+  "promotion_authorized": false,
+  "qualification_execution": "atomic_extract_evaluate",
+  "qualification_subject_sha256": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181",
+  "recomputation": {
+    "all_combined_actions_recomputed": true,
+    "all_per_head_scores_and_actions_recomputed": true,
+    "csv_json_exact_copy_validated": true,
+    "rows": 50,
+    "unique_sample_ids": 50,
+    "validator_cache": {
+      "cache_only": true,
+      "delegate_calls": 0,
+      "directory": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181/cache",
+      "enabled": true,
+      "expected_rows": 50,
+      "hits": 50,
+      "invalid_entries": 0,
+      "misses": 0,
+      "rebuild_requested": false,
+      "rebuilds": 0,
+      "schema_version": 1,
+      "write_error_details": [],
+      "write_errors": 0,
+      "writes": 0
+    }
+  },
+  "schema_version": 1,
+  "validation_id": "qwen25vl3b-schema4-dual-head-frozen-once-generic-v4-validator-v1"
+}

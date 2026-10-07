@@ -1,0 +1,40 @@
+{
+  "corpus_schema_version": 4,
+  "corpus_version": "v7",
+  "development_benign": 865,
+  "development_hard_negative_rows": 360,
+  "development_image_only_malicious": 840,
+  "development_rows": 1915,
+  "development_text_led_malicious": 210,
+  "external_benign_rows": 20,
+  "family_counts": {
+    "final": 10,
+    "regression": 10,
+    "test": 20,
+    "train": 170,
+    "validation": 20
+  },
+  "final_rows": 20,
+  "fresh_development_benign_rows_added_since_baseline": 340,
+  "image_directory_counts": {
+    "development": 1915,
+    "external_benign": 20,
+    "final": 20,
+    "regression": 10,
+    "text_led_final": 10
+  },
+  "image_paths": 1975,
+  "intentional_counterfactual_image_pairs": 220,
+  "ok": true,
+  "old_development_benign_rows_reused": 565,
+  "old_evaluation_rows_moved_to_train": 160,
+  "old_train_rows_evicted_during_schema3_feedback": 220,
+  "old_train_rows_retained_in_train": 405,
+  "regression_rows": 10,
+  "schema3_development_rows_reused": 1795,
+  "schema4_additional_hard_negative_rows": 120,
+  "schema4_additional_ids_sha256": "5e8655a185e5bbedae414b3f6f085e4de86a62dd501f2501bf9f0d7d3f78ede9",
+  "schema4_train_rows_replaced": 95,
+  "text_led_final_rows": 10,
+  "unique_image_hashes": 1755
+}

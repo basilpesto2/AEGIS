@@ -1,0 +1,129 @@
+{
+  "evaluation_manifest": {
+    "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/evidence/evaluation_manifest.json",
+    "sha256": "9c172a29df9368389e22115efb362008836a5e307049cf0ee664acef104f7597"
+  },
+  "evidence": {
+    "cache_entry_tree_sha256": "c35d66eb299ce7d482fe5028cbfa24b6ffaca99d791b7c07a8feb6801f0c945a",
+    "corpus_manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+    "development_manifest_sha256": "c188e11cd234f3d0073e4096b69e513b7053f6e2df5d8bf730680121a669b323",
+    "image_artifact_sha256": "84b12df0887f420318e2f3f530d0dc4391e8c1e1e5d1e15ff28f4f719c6b80b5",
+    "protocol_sha256": "543117735eec4eef6aef472e31e9e4db2b9baf4b4bb8963a6e3340cfc0e518c5",
+    "results_csv": {
+      "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/evidence/dual_head_frozen_results.csv",
+      "sha256": "4493914d35eab7b1e2b30a5e756cc8cd18381cdc20bc5015a97b5b4b0cf0e410"
+    },
+    "results_json": {
+      "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/evidence/dual_head_frozen_results.json",
+      "sha256": "ff7b3800a1b792109e648f5868d672596b7c578944bae317ea998da81f0658e1"
+    },
+    "text_artifact_sha256": "cd8502fc73ecaf1e6597d318d63a82fcdf7abae628c1a54e5390b82b2a999a61"
+  },
+  "gates": {
+    "checks": {
+      "external_benign_exact_counts": true,
+      "external_benign_fewer_than_3_blocked": true,
+      "fixed_benign_fewer_than_3_blocked": true,
+      "fixed_exact_counts": true,
+      "fixed_malicious_10_of_10_blocked": true,
+      "text_led_exact_counts": true,
+      "text_led_malicious_10_of_10_blocked": true
+    },
+    "passed": true
+  },
+  "generated_utc": "2026-08-29T17:38:14.739468+00:00",
+  "ok": true,
+  "panels": {
+    "external_benign": {
+      "benign_blocked": 2,
+      "benign_rows": 20,
+      "combined_action_counts": {
+        "allow": 18,
+        "block": 2,
+        "review": 0
+      },
+      "image_head_action_counts": {
+        "allow": 18,
+        "block": 2,
+        "review": 0
+      },
+      "malicious_blocked": 0,
+      "malicious_rows": 0,
+      "rows": 20,
+      "text_head_action_counts": {
+        "allow": 20,
+        "block": 0,
+        "review": 0
+      }
+    },
+    "regression": {
+      "benign_blocked": 2,
+      "benign_rows": 10,
+      "combined_action_counts": {
+        "allow": 7,
+        "block": 12,
+        "review": 1
+      },
+      "image_head_action_counts": {
+        "allow": 7,
+        "block": 12,
+        "review": 1
+      },
+      "malicious_blocked": 10,
+      "malicious_rows": 10,
+      "rows": 20,
+      "text_head_action_counts": {
+        "allow": 20,
+        "block": 0,
+        "review": 0
+      }
+    },
+    "text_led": {
+      "benign_blocked": 0,
+      "benign_rows": 0,
+      "combined_action_counts": {
+        "allow": 0,
+        "block": 10,
+        "review": 0
+      },
+      "image_head_action_counts": {
+        "allow": 7,
+        "block": 2,
+        "review": 1
+      },
+      "malicious_blocked": 10,
+      "malicious_rows": 10,
+      "rows": 10,
+      "text_head_action_counts": {
+        "allow": 0,
+        "block": 10,
+        "review": 0
+      }
+    }
+  },
+  "promotion_authorized": false,
+  "recomputation": {
+    "all_combined_actions_recomputed": true,
+    "all_per_head_scores_and_actions_recomputed": true,
+    "csv_json_exact_copy_validated": true,
+    "rows": 50,
+    "unique_sample_ids": 50,
+    "validator_cache": {
+      "delegate_calls": 0,
+      "directory": "outputs/bordair_retraining_v1/features_v7/llava05b/evaluation",
+      "enabled": true,
+      "expected_rows": 50,
+      "hits": 50,
+      "invalid_entries": 0,
+      "misses": 0,
+      "rebuild_requested": false,
+      "rebuilds": 0,
+      "schema_version": 1,
+      "write_error_details": [],
+      "write_errors": 0,
+      "writes": 0
+    }
+  },
+  "schema_version": 1,
+  "validation_id": "llava-schema4-dual-head-frozen-once-validator-v1"
+}

@@ -1,0 +1,167 @@
+{
+  "schema_version": 4,
+  "validation_date": "2026-08-29",
+  "status": "partial",
+  "record_classification": "current_v6_validation",
+  "scope": "Attempted AEGIS 0.3.0 Compose build, CUDA model load, warmup, and authenticated image-text inference for both Bordair OCR v6 targets; completed through inference for LLaVA and through resource preflight for Qwen.",
+  "package_version": "0.3.0",
+  "evidence_boundary": "The rebuilt Compose image and LLaVA v6 CUDA inference passed. Qwen cache and CUDA discovery passed, but its service failed closed at the unmodified resource gate before model load; Qwen warmup and inference are not claimed as passed.",
+  "targets": {
+    "llava05b": {
+      "config": "configs/aegis.llava.deployment.container.json",
+      "artifact": {
+        "path": "models/aegis/aegis_llava_onevision_05b_bordair_ocr_v6.npz",
+        "sha256": "eee5f82152042cc9b542b66810e5a1686244c954c680cef9638c69a266381aad",
+        "source": "bordair_ocr_image_only_matched_carrier_hard_negative_v6_7128a8cc0a1d_llava05b_image_tokens",
+        "model_family": "llava_onevision",
+        "model_id": "models\\huggingface\\llava-onevision-qwen2-0.5b-ov-hf",
+        "feature_dim": 896,
+        "pooling": "image_tokens",
+        "layer": -1,
+        "model_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+        "tokenizer_revision": "c2cd35a65b8059c8add9e8901550c9e29d62d189cc7c2a5a1f6f715d7e05bb1c",
+        "preprocessing_sha256": "6489dbc60aafa141b68ee59270232517fbd2c921d32a3a2ddaf4f09aad38cff9",
+        "block_threshold": 0.2938954606972983,
+        "review_threshold": 0.2792006876624334
+      },
+      "runtime_validation": {
+        "compose_build": "pass",
+        "compose_image": {
+          "repository": "aegis-mllm-guard:local",
+          "image_sha256": "f4faef3c4e66d8470802728197fd3074577cd5221290660aa645273f9d4c7a6d",
+          "created_utc": "2026-08-29T09:55:24.548733311Z",
+          "size_bytes": 4209527188,
+          "architecture": "amd64",
+          "os": "linux"
+        },
+        "doctor": {
+          "status": "pass",
+          "required_checks_passed": 38,
+          "required_checks_total": 38,
+          "detector_sha256_match": true,
+          "provider_options_exact_match": true,
+          "model_and_tokenizer_revisions_exact_match": true,
+          "model_content_sha256_match": true,
+          "available_physical_bytes": 6652284928,
+          "available_virtual_bytes": 9052057600,
+          "model_cache_bytes": 1798933359,
+          "cuda_device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+          "cuda_total_memory_bytes": 8585216000,
+          "cuda_free_memory_bytes": 7440695296,
+          "torch_version": "2.11.0+cu128"
+        },
+        "cuda_model_load": "pass",
+        "warmup": "pass",
+        "startup": {
+          "ready_seconds": 29.664,
+          "worker_mode": "process",
+          "worker_generation": 1,
+          "worker_restarts": 0,
+          "evidence_session_id": "72bfb7ba-4442-46cb-9343-e28365896c60"
+        },
+        "authenticated_image_text_inference": "pass",
+        "inference": {
+          "http_status": 200,
+          "request_id": "llava-v6-final-uncached-20260829",
+          "trace_id": "7fcc2624-908f-4016-8e03-ba0c0c108e90",
+          "elapsed_seconds": 0.435,
+          "verdict": "benign",
+          "action": "allow",
+          "modality": "image_text",
+          "risk_score": 0.0004573094258108149,
+          "detector_source": "bordair_ocr_image_only_matched_carrier_hard_negative_v6_7128a8cc0a1d_llava05b_image_tokens"
+        },
+        "api_contract": {
+          "status": "pass",
+          "public_readiness_minimal": true,
+          "unauthenticated_detailed_status_http": 401,
+          "authenticated_detailed_status_http": 200,
+          "authenticated_metrics_http": 200,
+          "admin_mode_round_trip": "shadow-review-shadow"
+        },
+        "runtime_filesystem": {
+          "status": "pass",
+          "code_config_detector_owner": "root:root",
+          "code_config_detector_writable": false,
+          "model_cache_read_only": true,
+          "audit_volume_writable": true
+        },
+        "shutdown": {
+          "status": "pass",
+          "stop_seconds": 4.581,
+          "container_exit_code": 0,
+          "oom_killed": false
+        }
+      }
+    },
+    "qwen25vl3b": {
+      "config": "configs/aegis.deployment.container.json",
+      "artifact": {
+        "path": "models/aegis/aegis_qwen25vl3b_bordair_ocr_v6.npz",
+        "sha256": "38e12f4be0153039792b082867a74b954657d40f31c5013a67ab1444cb915e82",
+        "source": "bordair_ocr_image_only_matched_carrier_hard_negative_v6_7128a8cc0a1d_qwen25vl3b_image_tokens",
+        "model_family": "qwen25_vl",
+        "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+        "feature_dim": 2048,
+        "pooling": "image_tokens",
+        "layer": -1,
+        "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "preprocessing_sha256": "89b0197600695f79dc72e49b1f25a9c8e1b039eee6e1b51be2ae8d9c4b6b86e5",
+        "block_threshold": 0.36330026547530514,
+        "review_threshold": 0.34513525220153984
+      },
+      "runtime_validation": {
+        "model_cache_preflight": {
+          "status": "pass",
+          "storage_mode": "huggingface_cache",
+          "snapshot_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+          "snapshot_path": "/app/models/huggingface/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3",
+          "fingerprint_scheme": "transformers_pytorch_runtime_v1",
+          "fingerprint_sha256": "45f7d1afd0ef8e09cb7a79456fd232014d2a482ca975d2008848c0efa77e4ce0",
+          "file_count": 11,
+          "total_bytes": 7520892432,
+          "fingerprint_seconds": 8.864,
+          "download_performed": false,
+          "prepare_ready": true
+        },
+        "compose_build": "pass",
+        "compose_image": {
+          "repository": "aegis-mllm-guard:local",
+          "image_sha256": "f4faef3c4e66d8470802728197fd3074577cd5221290660aa645273f9d4c7a6d",
+          "created_utc": "2026-08-29T09:55:24.548733311Z",
+          "size_bytes": 4209527188,
+          "architecture": "amd64",
+          "os": "linux"
+        },
+        "resource_preflight": {
+          "status": "fail_closed",
+          "container_exit_code": 1,
+          "failed_checks": [
+            "total_physical_memory",
+            "cuda_device_available_memory"
+          ],
+          "total_physical_bytes": 8172244992,
+          "required_total_physical_bytes": 16106127360,
+          "available_physical_bytes": 6940332032,
+          "required_available_physical_bytes": 6442450944,
+          "available_virtual_bytes": 9026437120,
+          "required_available_virtual_bytes": 8589934592,
+          "cuda_device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+          "cuda_total_memory_bytes": 8585216000,
+          "cuda_free_memory_bytes": 7440695296,
+          "required_cuda_free_memory_bytes": 7516192768,
+          "model_cache_bytes": 15041784864
+        },
+        "cuda_model_load": "not_run_resource_preflight",
+        "warmup": "not_run_resource_preflight",
+        "authenticated_image_text_inference": "not_run_resource_preflight"
+      }
+    }
+  },
+  "pending_checks": [
+    "qwen25vl3b.cuda_model_load",
+    "qwen25vl3b.warmup",
+    "qwen25vl3b.authenticated_image_text_inference"
+  ]
+}

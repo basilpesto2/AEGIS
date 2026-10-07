@@ -14,9 +14,13 @@ application sends the prompt to AEGIS first, reads the decision, and decides wha
 do next.
 
 This README and `aegis targets` describe the current bundled runtime and target
-profiles. Historical benchmark and research material is retained under
-[`deliverables/`](deliverables/README.md); it describes earlier experiments. The v7
-research updates and frozen qualification evidence are outside this runtime release.
+profiles. Current v7 research tools, the synthetic benchmark, and current and
+historical validation records are retained under
+[`deliverables/`](deliverables/README.md). The v7 detector directories under
+`models/aegis/` also retain their pair manifests and complete frozen qualification
+evidence. These research materials support validation and reproduction; the CLI,
+dashboard, and API runtime load the four packaged v7 heads without running the
+research pipeline or requiring its datasets and feature caches.
 `/readyz` proves only coarse readiness and the active target;
 the authenticated `/v1/status` response is the operational source of truth for the
 detector identity actually loaded by a running service.
@@ -67,7 +71,7 @@ Start with `llava05b`. On Windows, a computer sold with 8 GB of RAM can expose l
 than 8 GiB after hardware reservations. A 16 GB host is strongly recommended even
 for LLaVA so that Windows, Docker, and model loading have enough working memory.
 
-Local validation completed LLaVA v7 CUDA model loading, warmup, authenticated
+The current 2026-08-30 Compose validation completed LLaVA v7 CUDA model loading, warmup, authenticated
 status, dashboard inference, and graceful shutdown. Qwen validation stopped at
 the RAM and free-VRAM preflight before model loading; its CUDA loading, warmup,
 and live inference remain pending on a host meeting those requirements. Run the

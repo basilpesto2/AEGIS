@@ -3,3 +3,9 @@
 *.npz binary
 *.png binary
 *.xlsx binary
+
+# Frozen qualification evidence is hash-bound to its original bytes.
+/models/aegis/*_v7_dual_or/** -text
+
+# The benchmark asset manifest records this file's original byte hash.
+/deliverables/benchmark/data/benchmark_rows.json -text

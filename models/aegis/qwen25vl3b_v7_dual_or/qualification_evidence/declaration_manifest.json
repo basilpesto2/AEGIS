@@ -1,0 +1,90 @@
+{
+  "corpus_manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+  "declared_utc": "2026-08-30T05:34:01.419071+00:00",
+  "files": {
+    "development_manifest": {
+      "bytes": 1928,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/development_manifest.json",
+      "sha256": "1f181ee00f39cad7986f768cb7554c2485a5a54d5392315fb5d9efeab82e9952"
+    },
+    "evaluator": {
+      "bytes": 294,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/evaluate_once.py",
+      "sha256": "93493c06828abf7e4a0981ff589ae933c439fd127b670d53d93cb2ce58e91ad1"
+    },
+    "external_benign_metadata": {
+      "bytes": 14019,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/metadata/external_benign_metadata_v7.csv",
+      "sha256": "bca44d53483ba029adad2db7a513dda2a88eef5d85bb1fb0be4ecde94d07ec02"
+    },
+    "extractor": {
+      "bytes": 20201,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/extract_once.py",
+      "sha256": "b00c374b6ee1cbc7cd3a069c4f57f1bbbaf4bfcf1a6a5886fa4d09617178e34c"
+    },
+    "implementation_manifest": {
+      "bytes": 9742,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/implementation_manifest.json",
+      "sha256": "276bbdcdc06984ecd5ae238b7135ec6ab0fe31793fa9d7c69cb7840ded4540c0"
+    },
+    "input_snapshot_manifest": {
+      "bytes": 11347,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/input_snapshot_manifest.json",
+      "sha256": "0940f362e13a2bfc2ced154db1f3dbd5811e4242451e161adfcf48d62cdb1fe9"
+    },
+    "model_snapshot_manifest": {
+      "bytes": 5790,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/model_snapshot_manifest.json",
+      "sha256": "e336e92146f9d54030fc084ee9376c6326da5207231409440a2f22b80ee4d16f"
+    },
+    "ordered_metadata": {
+      "bytes": 26889,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/metadata/ordered_frozen_metadata.csv",
+      "sha256": "f8e0739f2a45eb4d031e720acb4e199097bbf4d93e625b6b811c997ea838ac42"
+    },
+    "protocol": {
+      "bytes": 34362,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/protocol.json",
+      "sha256": "2d126ad9693fdc41c5eca8bf689df4501600cac8051c838efdbe18d1262c6395"
+    },
+    "regression_metadata": {
+      "bytes": 8378,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/metadata/final_metadata_v7.csv",
+      "sha256": "d171cc1e4e85dcfcc983e837add08b4a64895386bc6e7f5917808153e2f5f213"
+    },
+    "strict_corpus_validation": {
+      "bytes": 1215,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/strict_corpus_validation.json",
+      "sha256": "83526b63571eeba23f37a5e343a919a89e6417f861a22307c704ce05671c5b3a"
+    },
+    "subject_claim": {
+      "bytes": 2468,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/subject_claim.json",
+      "sha256": "5c35f475ff9bec6904bdf0ab07e9b681b4322779164231775cae5387e13aba9a"
+    },
+    "text_led_metadata": {
+      "bytes": 4926,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/metadata/text_led_final_metadata_v7.csv",
+      "sha256": "87fddbee0146aa17c8454c768dda058946b00ddb0fbab6e572ad08348bf762d6"
+    },
+    "validator": {
+      "bytes": 287,
+      "path": "outputs/bordair_retraining_v1/training_v7/qwen25vl3b/dual_or/frozen_evaluation_once_generic_v4/.f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181.declare-u9511hnq/validate_once.py",
+      "sha256": "d7f47ac564fa4525bcc6b985d5b3feae78e11c1df658fa1c581dc587cd7d0d67"
+    }
+  },
+  "no_frozen_scores_observed": true,
+  "ordered_rows": 50,
+  "ordered_unique_sample_ids": 50,
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "pair_identity_sha256": "b6433ce4d465a1d2ca45abe1317f917231312be9bbc23d623b3ed2bb94c6c630",
+  "promotable": true,
+  "protocol_id": "qwen25vl3b-schema4-dual-head-frozen-once-generic-v4",
+  "protocol_sha256": "2d126ad9693fdc41c5eca8bf689df4501600cac8051c838efdbe18d1262c6395",
+  "qualification_execution": "atomic_extract_evaluate",
+  "qualification_subject_sha256": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181",
+  "runtime_detector_identity_sha256": "960f53c6fa3e584bfd2ff16a6ec3cd2d54f592e640e32da55748c2b8facd3a8e",
+  "schema_version": 1,
+  "state": "declared",
+  "target": "qwen25vl3b"
+}

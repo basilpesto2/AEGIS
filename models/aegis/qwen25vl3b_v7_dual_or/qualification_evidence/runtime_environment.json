@@ -1,0 +1,80 @@
+{
+  "closure_scope": "bound code plus recorded runtime environment",
+  "container_image": {
+    "supplied_id": "sha256:b2c4a0f53d52807275f26cd4e938f4d2709de0491cf7f17ca3b15a8172821274",
+    "verification": "caller_supplied_not_independently_verified"
+  },
+  "model_snapshot_after_extraction": {
+    "schema_version": 1,
+    "snapshots": {
+      "model": {
+        "content_sha256": "45f7d1afd0ef8e09cb7a79456fd232014d2a482ca975d2008848c0efa77e4ce0",
+        "n_files": 11,
+        "snapshot_path": "/app/models/huggingface/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "total_bytes": 7520892432
+      },
+      "tokenizer": {
+        "content_sha256": "45f7d1afd0ef8e09cb7a79456fd232014d2a482ca975d2008848c0efa77e4ce0",
+        "n_files": 11,
+        "snapshot_path": "/app/models/huggingface/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "total_bytes": 7520892432
+      }
+    }
+  },
+  "model_snapshot_before_extraction": {
+    "schema_version": 1,
+    "snapshots": {
+      "model": {
+        "content_sha256": "45f7d1afd0ef8e09cb7a79456fd232014d2a482ca975d2008848c0efa77e4ce0",
+        "n_files": 11,
+        "snapshot_path": "/app/models/huggingface/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "total_bytes": 7520892432
+      },
+      "tokenizer": {
+        "content_sha256": "45f7d1afd0ef8e09cb7a79456fd232014d2a482ca975d2008848c0efa77e4ce0",
+        "n_files": 11,
+        "snapshot_path": "/app/models/huggingface/models--Qwen--Qwen2.5-VL-3B-Instruct/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3",
+        "total_bytes": 7520892432
+      }
+    }
+  },
+  "model_snapshot_pre_post_equal": true,
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "packages": {
+    "Pillow": "12.2.0",
+    "accelerate": "1.14.0",
+    "numpy": "2.4.4",
+    "qwen-vl-utils": "0.0.14",
+    "safetensors": "0.8.0",
+    "torch": "2.11.0+cu128",
+    "transformers": "5.12.0"
+  },
+  "protocol_id": "qwen25vl3b-schema4-dual-head-frozen-once-generic-v4",
+  "python": {
+    "executable": "/usr/local/bin/python",
+    "implementation": "CPython",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+    "version": "3.11.15 (main, Jul 14 2026, 02:10:36) [GCC 12.2.0]"
+  },
+  "qualification_execution": "atomic_extract_evaluate",
+  "qualification_subject_sha256": "f5c4443d78c5db6e6ad1e3aa16f00a3eeceb04ab2f7ff9ac215a3e839afa1181",
+  "recorded_utc": "2026-08-30T05:34:54.100787+00:00",
+  "schema_version": 1,
+  "target": "qwen25vl3b",
+  "torch_runtime": {
+    "cuda_available": true,
+    "cuda_device_count": 1,
+    "cuda_devices": [
+      {
+        "capability": [
+          8,
+          9
+        ],
+        "index": 0,
+        "name": "NVIDIA GeForce RTX 4060 Laptop GPU"
+      }
+    ],
+    "cuda_version": "12.8",
+    "version": "2.11.0+cu128"
+  }
+}

@@ -136,7 +136,7 @@ summary.getRange("A20:H20").merge();
 summary.getRange("A21:H22").merge();
 summary.getRange("A20").values = [["Evidence boundary"]];
 summary.getRange("A21").values = [[
-  "This workbook documents a synthetic, safety-redacted dataset. It is not a performance report for the deployed LLaVA tuned-v3 detector; current live-system evidence is recorded under deliverables/runtime_validation/."
+  "This workbook documents a synthetic, safety-redacted dataset. It is not detector-training data or a performance report for any maintained AEGIS target; runtime evidence is recorded under deliverables/runtime_validation/."
 ]];
 summary.getRange("A20:H20").format = {
   fill: "#315B7D",

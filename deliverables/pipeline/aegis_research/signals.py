@@ -3,6 +3,13 @@ from __future__ import annotations
 import numpy as np
 
 
+POOLING_FEATURE_VIEWS = {
+    "text_tokens": "text_representation",
+    "image_tokens": "image_representation",
+    "text_image_tokens": "joint_representation",
+}
+
+
 def binary_entropy(probabilities: np.ndarray) -> np.ndarray:
     values = np.asarray(probabilities, dtype=np.float64).reshape(-1)
     if np.any((values < 0.0) | (values > 1.0)):

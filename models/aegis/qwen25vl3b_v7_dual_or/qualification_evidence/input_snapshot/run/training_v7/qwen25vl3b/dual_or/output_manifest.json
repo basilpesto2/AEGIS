@@ -1,0 +1,53 @@
+{
+  "artifact_mode": "dual_or",
+  "outputs": {
+    "candidate_pair_metrics.csv": {
+      "bytes": 4832526,
+      "sha256": "5a72a9640a71df5c38e2a93d7a81b5aa8b82236d1b7f19ab5c6ac3d041fade91"
+    },
+    "detector_pair_manifest.json": {
+      "bytes": 3856,
+      "sha256": "f44d931e19a39152ad91d0d619027ab6c36df8477de3a3c8be04cb0f2d7c9d98"
+    },
+    "image_fit_diagnostics.csv": {
+      "bytes": 9386,
+      "sha256": "f6c983634063721cea48015f7db762f1f2a3d4f5f43326438f8d7ae5042573d0"
+    },
+    "internal_test_predictions.csv": {
+      "bytes": 22127,
+      "sha256": "f6206d3318ed67cf79f1f4ef2f6525b2f8a6f12f56195cb0755ab7bafaf645da"
+    },
+    "prior_regression_predictions.csv": {
+      "bytes": 1240,
+      "sha256": "bdf24069593a3fe41d65847c03319eb5081f0e0eb669c2f24187a55806d6dabe"
+    },
+    "qualification_features_v1.npz": {
+      "bytes": 3136038,
+      "sha256": "e21ef2d28b799e0c381f12eb0015c984b72fff284e7d58dd5e5102ec6d517098"
+    },
+    "qwen25vl3b_image_head_v1.npz": {
+      "bytes": 55662,
+      "sha256": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb"
+    },
+    "qwen25vl3b_text_head_v1.npz": {
+      "bytes": 55654,
+      "sha256": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8"
+    },
+    "text_fit_diagnostics.csv": {
+      "bytes": 3461,
+      "sha256": "6ca48b4eb1aca82339cc7b77ac1402a7ea7b8b1d9157012c2f4d6cb52be6fd48"
+    },
+    "training_summary.json": {
+      "bytes": 9694,
+      "sha256": "14d67f62fd7e37d706dea8c8022aaadfacb28ee0458930b818154680a214a28a"
+    },
+    "validation_predictions.csv": {
+      "bytes": 21609,
+      "sha256": "c1520ca23d40060796e2fa10b5f279210a99e994aec088a09ee22b59a7a31d05"
+    }
+  },
+  "pair_identity_sha256": "b6433ce4d465a1d2ca45abe1317f917231312be9bbc23d623b3ed2bb94c6c630",
+  "schema_version": 2,
+  "target": "qwen25vl3b",
+  "training_identity_sha256": "3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+}

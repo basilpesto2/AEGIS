@@ -1,0 +1,17 @@
+{
+  "evaluation_manifest": {
+    "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/evidence/evaluation_manifest.json",
+    "sha256": "9c172a29df9368389e22115efb362008836a5e307049cf0ee664acef104f7597"
+  },
+  "promotion_authorized": false,
+  "schema_version": 1,
+  "validation_report": {
+    "bytes": 3982,
+    "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/evidence/validation_report.json",
+    "sha256": "358bc0ef916a5ca1ce097d5d03972fe6d7944a20d61608f8b8869d1ef579752d"
+  },
+  "validator": {
+    "path": "outputs/bordair_retraining_v1/channel_heads_schema4_dev_only/frozen_evaluation_once/validate_once.py",
+    "sha256": "b4c039661b790d152ef5931c0602ebed211d5d56ee165bf6a195ffebf1ea24bf"
+  }
+}

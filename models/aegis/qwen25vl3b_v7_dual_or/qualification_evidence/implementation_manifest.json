@@ -1,0 +1,261 @@
+{
+  "files": {
+    "AEGIS/__init__.py": {
+      "bytes": 400,
+      "sha256": "3b31495923f51c81e250c217b518451c3fa8f3fadcd23b418f5599c6f098db10"
+    },
+    "AEGIS/adapters/__init__.py": {
+      "bytes": 63,
+      "sha256": "18de48f56681cfeeadb270c68d1128edb2bfd7eb47b68fd22e8f81552512c872"
+    },
+    "AEGIS/adapters/common.py": {
+      "bytes": 370,
+      "sha256": "98cba4ef39b0119b59e26327d03df7e34550a7c7aaccf76a944f5f17559836a6"
+    },
+    "AEGIS/adapters/llava_onevision.py": {
+      "bytes": 12358,
+      "sha256": "ef809d0f32f459878d3b2371eea37dcb1440d8f1b07d7cb5b20f072240306cc7"
+    },
+    "AEGIS/adapters/qwen25_vl.py": {
+      "bytes": 16893,
+      "sha256": "3b51eef6a06b8c80c2a2a9b573def71c926d5641e2a70416938570579700e068"
+    },
+    "AEGIS/audit.py": {
+      "bytes": 9417,
+      "sha256": "97d7cf3f9d42b30db3e279cffa673bcfddf46910ba24b986d438dc5833cff539"
+    },
+    "AEGIS/bounded_cache.py": {
+      "bytes": 2961,
+      "sha256": "ee4bceffb26892666c9aa741a5dbad7057c8ac85b7179eca26f00e4c4d4aaa01"
+    },
+    "AEGIS/cli.py": {
+      "bytes": 14697,
+      "sha256": "b29e6164c7d0a2b51a2506f79db47de683746965fb6c9aae2eb1cddbcdc2e3e4"
+    },
+    "AEGIS/client.py": {
+      "bytes": 18501,
+      "sha256": "d8915667b01d89d9373fb034f369695e3d47ef2a08022d9f9f42e3d93fc0f610"
+    },
+    "AEGIS/demo.py": {
+      "bytes": 3143,
+      "sha256": "71ff9ba4e9b9d023a94f45f38cdce2d6f2d3821136337035a6f08481921648df"
+    },
+    "AEGIS/deployment_config.py": {
+      "bytes": 49893,
+      "sha256": "22264baeddb6fe47d614722ee44b1e1b4273634f742aa3fa23b1d5a097c6eeb7"
+    },
+    "AEGIS/detector_artifact.py": {
+      "bytes": 9316,
+      "sha256": "c84f873b00e90e881baa429f13778fe7bb70800ef014241c8a362b1842d8424c"
+    },
+    "AEGIS/detector_set.py": {
+      "bytes": 9268,
+      "sha256": "8d330f5230cb2f6e60e982d2e2a04e0f6b22ff7e3033f60961e8d61e1e811431"
+    },
+    "AEGIS/guardrail.py": {
+      "bytes": 27298,
+      "sha256": "da6e13d7963604e36746af6fa4627425061cac6c3f007440e52ecc2bf3248732"
+    },
+    "AEGIS/gui_control.py": {
+      "bytes": 40037,
+      "sha256": "c968fdbd41c8a917da831e2d57b5d0668ba25377e040ce294088ab3013825e21"
+    },
+    "AEGIS/gui_history.py": {
+      "bytes": 41773,
+      "sha256": "14e472ebce1af76ebca969592d6fe466bbc6f57a4399952e4c5fcb949ea39b9e"
+    },
+    "AEGIS/gui_server.py": {
+      "bytes": 71688,
+      "sha256": "aab8195939cb9506371d985b5a51867fa7801330dce9a74ce66eaab35749d533"
+    },
+    "AEGIS/http_framing.py": {
+      "bytes": 2439,
+      "sha256": "94fa358d6ad5b8fdc5b5c05fa3d6b1b5faba2b97bfdbbb3dbecb9af9666baef9"
+    },
+    "AEGIS/http_server.py": {
+      "bytes": 35995,
+      "sha256": "4223dca36263d7e5cb4b3bf3f168e94132c06f8a888ee2691e8cec638665d9a3"
+    },
+    "AEGIS/http_transport.py": {
+      "bytes": 14131,
+      "sha256": "a527379b77a9e43e8d8326e76affbff1af314e194a67a1787020a57d36e36a50"
+    },
+    "AEGIS/io.py": {
+      "bytes": 1314,
+      "sha256": "431bb4754549787378b51571d6df4e353139a6c9c6050beaabe453afe4d7a283"
+    },
+    "AEGIS/isolated_service.py": {
+      "bytes": 29614,
+      "sha256": "82ec1f30dd6efd504cb2e69cac78bbd323d4c77d6add96808324a0a60bceb737"
+    },
+    "AEGIS/logistic.py": {
+      "bytes": 4179,
+      "sha256": "b6cf64704bd2801decaa5c2e20c3fff5f2628a4c194500f92a51feff263b2cac"
+    },
+    "AEGIS/model_prepare.py": {
+      "bytes": 5813,
+      "sha256": "f178e7d543ef088d875c6ec6c2e15d2269f74090e8f01c110961dd69a4bb48eb"
+    },
+    "AEGIS/provenance.py": {
+      "bytes": 3122,
+      "sha256": "3191b0963b90c822c202a30a8041a8a9bb3b350f33041956af1e398c2830cb22"
+    },
+    "AEGIS/provider_contract.py": {
+      "bytes": 1001,
+      "sha256": "955ac08ec6b74572bf68594555d08919dddaeb70c766a468951cdeb10c3d3f89"
+    },
+    "AEGIS/providers.py": {
+      "bytes": 18736,
+      "sha256": "2d0fd09f390f786bae14b0214a7e61ea3d0f16f9a63b36b032df7b543623395f"
+    },
+    "AEGIS/readiness.py": {
+      "bytes": 321,
+      "sha256": "2912479e00cf2e4183e0181cf66935a5828fc8a7de4b39f1db4eeb835ca60919"
+    },
+    "AEGIS/secret_validation.py": {
+      "bytes": 4217,
+      "sha256": "2339a91b546450e6f7d2eae6c00622b0de4cd5d712f54b823554db2ce49a251f"
+    },
+    "AEGIS/service.py": {
+      "bytes": 19355,
+      "sha256": "191fafcd6edc7b68f694bbd07c0e832e5146c152387496900da289bea5c53644"
+    },
+    "AEGIS/strict_json.py": {
+      "bytes": 1106,
+      "sha256": "20a142f00693d628bb170c1e66a3de84101f170fa50256def7ae085b5905820b"
+    },
+    "AEGIS/system_resources.py": {
+      "bytes": 16445,
+      "sha256": "16db2ace030c22ed24ab8b78f581ee9d66e25ce5da2bb25f482125fd03f13c93"
+    },
+    "AEGIS/target_assets.py": {
+      "bytes": 960,
+      "sha256": "e1a82588609fe621495732da17485ec4c3f390c8fed443cbeeef57a626b0c84c"
+    },
+    "AEGIS/target_profiles.py": {
+      "bytes": 14076,
+      "sha256": "61dbc134166df5100b9c1c5be4ca554e793e30b475ac43fbaaf7301bf1b7dede"
+    },
+    "AEGIS/web/__init__.py": {
+      "bytes": 76,
+      "sha256": "7929fdb171e988eef7a9959edcb2cc6a62a2a0613f5bc47e2e75ff1549754785"
+    },
+    "aegis_research/__init__.py": {
+      "bytes": 404,
+      "sha256": "b550fe795271d62688a0aa89e682c030379d5a7b5e8c3a144fbffa4ef2deee5a"
+    },
+    "aegis_research/bordair_corpus.py": {
+      "bytes": 67670,
+      "sha256": "20a69761ae93df0d6c3d076cfdf5976e8fe5eebf5e2ae5b06a8deef77dab6c23"
+    },
+    "aegis_research/bordair_corpus_prepare.py": {
+      "bytes": 85563,
+      "sha256": "ac24e346a57fc7f0569db340e36411ac83b3029f4c532a4de5fcfb3bb29393a2"
+    },
+    "aegis_research/bordair_dual.py": {
+      "bytes": 82232,
+      "sha256": "23bb21531fa962422d1bfb1b851a1198ed61eb1bac487dc0e82d6d934e3617ce"
+    },
+    "aegis_research/bordair_dual_evaluation.py": {
+      "bytes": 42841,
+      "sha256": "d3b7de4b9601d9a75c141d1a048bf9ed07a4bfcedee62b5f3244ba94a719767d"
+    },
+    "aegis_research/bordair_dual_evaluation_validation.py": {
+      "bytes": 18673,
+      "sha256": "d5cb2aa086084a93ba7c4d52c042a85d4ff9b336d0f1bf8c918d37092ffe40fa"
+    },
+    "aegis_research/bordair_dual_promotion.py": {
+      "bytes": 15355,
+      "sha256": "7a521f8bd8e0b3122740a44eab2a12002cadfd76546ade207524a806754c73a6"
+    },
+    "aegis_research/bordair_dual_publish.py": {
+      "bytes": 15801,
+      "sha256": "e5d9f6eaec3663de3c900ad0434489dec456bb598b1677c75ee648cc3d6a836a"
+    },
+    "aegis_research/bordair_dual_qualification.py": {
+      "bytes": 108695,
+      "sha256": "a4d094c877b9698e258766a5851904d62cfd6bb7b0510c92bb31c809bcf83765"
+    },
+    "aegis_research/bordair_dual_training.py": {
+      "bytes": 42420,
+      "sha256": "ab0eeb46686430072fd2d9d4a675f5f7218ad2964a70c4c3e96e76a4f1839189"
+    },
+    "aegis_research/bordair_evaluation.py": {
+      "bytes": 78202,
+      "sha256": "06f41059ad895e9e679efb42084c0f53479c82d2d42e1f9afde1178e5e09d11d"
+    },
+    "aegis_research/bordair_evaluation_validation.py": {
+      "bytes": 22391,
+      "sha256": "e06a36039f0b44e151bb6d9cea20119e56f5a03edfd0226f79256389cf75ac88"
+    },
+    "aegis_research/bordair_paths.py": {
+      "bytes": 2581,
+      "sha256": "4fc902e73f710b43b5c6f9269a826f98dc5c45e1503f858d8bec08b2cead7e3e"
+    },
+    "aegis_research/bordair_promotion.py": {
+      "bytes": 13283,
+      "sha256": "a55639b1d747a4558031c7f20c79ff90ab4022f9952abbf91d282c007e43d8ba"
+    },
+    "aegis_research/bordair_provenance.py": {
+      "bytes": 3762,
+      "sha256": "7a002c8e554ff6ac02f1faeb6cf81cdb58874eca0612f3db8b0a58bc93f23b4c"
+    },
+    "aegis_research/bordair_training.py": {
+      "bytes": 115114,
+      "sha256": "5141bb6b4fa74c458ad125e63b427adea361de30141891457f69bf8a0352e7e6"
+    },
+    "aegis_research/experiment.py": {
+      "bytes": 5703,
+      "sha256": "8e71faca57c1bf6ad31e9dca4104c35741ff59cb1be9d2ece4701e3c0d496998"
+    },
+    "aegis_research/io.py": {
+      "bytes": 3188,
+      "sha256": "2c8dc030f6034e0556af981dcdab4bf4ab732c0fe3bef606d6ba0e3e9dd193cb"
+    },
+    "aegis_research/metrics.py": {
+      "bytes": 2895,
+      "sha256": "fc2d457762373bc01a6166e69a1be67b5aa6646e8287deb2a1cb9e783dcdc1fa"
+    },
+    "aegis_research/model.py": {
+      "bytes": 4375,
+      "sha256": "4f895b99eb7d0a3356894fcdca01fab1601972b56953ec9fd585b830ccbb24aa"
+    },
+    "aegis_research/signals.py": {
+      "bytes": 3236,
+      "sha256": "c225862ff04fc90c710af9a714df232ae38577f154ef80c91e20a5cf18d56ab6"
+    },
+    "runtime_contract/Dockerfile": {
+      "bytes": 1660,
+      "sha256": "1ae9968d45b8a47c2e568e257b80cc0be6389253e435de28dec8a3dd741e42f8"
+    },
+    "runtime_contract/pipeline-requirements.txt": {
+      "bytes": 28,
+      "sha256": "2f9c2373746a116bc6da037400dad5f94e2263533e73b3d5a66b4c048b99164c"
+    },
+    "runtime_contract/pyproject.toml": {
+      "bytes": 643,
+      "sha256": "fc759b450db86e55f6ae866a54ac97ae9a989d1da33be05c67da2d235de268bb"
+    },
+    "runtime_contract/requirements-runtime.constraints.txt": {
+      "bytes": 1477,
+      "sha256": "874b7c214245db2d8b1a6a52fb85ec2144213c8398e6f7de234501c510ee4f51"
+    },
+    "scripts/evaluate_bordair_dual_detector.py": {
+      "bytes": 294,
+      "sha256": "93493c06828abf7e4a0981ff589ae933c439fd127b670d53d93cb2ce58e91ad1"
+    },
+    "scripts/extract_mllm_features.py": {
+      "bytes": 20201,
+      "sha256": "b00c374b6ee1cbc7cd3a069c4f57f1bbbaf4bfcf1a6a5886fa4d09617178e34c"
+    },
+    "scripts/validate_bordair_dual_evaluation.py": {
+      "bytes": 287,
+      "sha256": "d7f47ac564fa4525bcc6b985d5b3feae78e11c1df658fa1c581dc587cd7d0d67"
+    }
+  },
+  "numpy_version": "2.4.4",
+  "package_format": "generic_dual_evaluator_compat_v1",
+  "python_version": "3.11.15 (main, Jul 14 2026, 02:10:36) [GCC 12.2.0]",
+  "schema_version": 1,
+  "scope": "complete local AEGIS/aegis_research Python source plus tracked Docker and dependency-contract files; runtime versions are recorded separately during the atomic attempt"
+}

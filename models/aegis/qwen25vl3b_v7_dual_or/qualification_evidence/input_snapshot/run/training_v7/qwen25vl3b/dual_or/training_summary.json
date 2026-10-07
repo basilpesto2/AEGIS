@@ -1,0 +1,274 @@
+{
+  "acceptance": {
+    "internal_checks": {
+      "combined_benign_false_positives_at_most_8_of_80": true,
+      "exact_80_benign_80_image_led_20_text_led": true,
+      "image_head_blocks_image_led_80_of_80": true,
+      "text_head_blocks_text_led_20_of_20": true
+    },
+    "passed": true,
+    "regression_checks": {
+      "exact_10_malicious_rows": true,
+      "image_head_blocks_prior_image_attacks_10_of_10": true
+    },
+    "validation_checks": {
+      "combined_benign_false_positives_at_most_2_of_80": true,
+      "exact_80_benign_80_image_led_20_text_led": true,
+      "image_head_blocks_image_led_80_of_80": true,
+      "text_head_blocks_text_led_20_of_20": true
+    }
+  },
+  "artifact_mode": "dual_or",
+  "artifact_pair": {
+    "artifacts": {
+      "image": {
+        "block_threshold": 0.1690249723273814,
+        "feature_dim": 2048,
+        "format": "AEGIS DetectorArtifact NPZ version 1",
+        "name": "image",
+        "path": "qwen25vl3b_image_head_v1.npz",
+        "pooling": "image_tokens",
+        "review_threshold": 0.1490249723273814,
+        "sha256": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+        "source": "bordair_ocr_multichannel_counterfactual_v7_ffd961e91771_qwen25vl3b_image_tokens_cfgcand-3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+      },
+      "text": {
+        "block_threshold": 0.9975257227486033,
+        "feature_dim": 2048,
+        "format": "AEGIS DetectorArtifact NPZ version 1",
+        "name": "text",
+        "path": "qwen25vl3b_text_head_v1.npz",
+        "pooling": "text_tokens",
+        "review_threshold": 0.9775257227486033,
+        "sha256": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8",
+        "source": "bordair_ocr_multichannel_counterfactual_v7_ffd961e91771_qwen25vl3b_text_tokens_cfgcand-3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+      }
+    },
+    "manifest": "detector_pair_manifest.json",
+    "manifest_sha256": "f44d931e19a39152ad91d0d619027ab6c36df8477de3a3c8be04cb0f2d7c9d98",
+    "pair_identity_sha256": "b6433ce4d465a1d2ca45abe1317f917231312be9bbc23d623b3ed2bb94c6c630",
+    "qualification_evidence": null,
+    "runtime_detector_identity_sha256": "960f53c6fa3e584bfd2ff16a6ec3cd2d54f592e640e32da55748c2b8facd3a8e"
+  },
+  "base_feature_dimension": 2048,
+  "channel_training": {
+    "image": {
+      "excluded": "text-led malicious",
+      "included": "all benign + image-led malicious"
+    },
+    "text": {
+      "excluded": "image-led malicious",
+      "included": "all benign + text-led malicious"
+    }
+  },
+  "corpus_provenance": {
+    "development_metadata_sha256": "d8efb9365fa61be66dcda3400b621cce42aa03e61c3f7a080a0ec8c5db456b49",
+    "manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+    "regression_metadata_sha256": "f6c06498c9aa4f21bc6520474bb5de2d9a0d47912ad0a1ed482dba4135628a8a"
+  },
+  "development_qualification_evidence": {
+    "artifact_sha256": {
+      "image": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+      "text": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8"
+    },
+    "corpus": {
+      "development_metadata_sha256": "d8efb9365fa61be66dcda3400b621cce42aa03e61c3f7a080a0ec8c5db456b49",
+      "manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+      "regression_metadata_sha256": "f6c06498c9aa4f21bc6520474bb5de2d9a0d47912ad0a1ed482dba4135628a8a"
+    },
+    "feature_snapshot": {
+      "bytes": 3136038,
+      "path": "qualification_features_v1.npz",
+      "sha256": "e21ef2d28b799e0c381f12eb0015c984b72fff284e7d58dd5e5102ec6d517098"
+    },
+    "predictions": {
+      "internal_test": {
+        "path": "internal_test_predictions.csv",
+        "rows": 180,
+        "sha256": "f6206d3318ed67cf79f1f4ef2f6525b2f8a6f12f56195cb0755ab7bafaf645da"
+      },
+      "prior_regression": {
+        "path": "prior_regression_predictions.csv",
+        "rows": 10,
+        "sha256": "bdf24069593a3fe41d65847c03319eb5081f0e0eb669c2f24187a55806d6dabe"
+      },
+      "validation": {
+        "path": "validation_predictions.csv",
+        "rows": 180,
+        "sha256": "c1520ca23d40060796e2fa10b5f279210a99e994aec088a09ee22b59a7a31d05"
+      }
+    },
+    "schema_version": 1
+  },
+  "generated_utc": "2026-08-30T04:33:17.675771+00:00",
+  "provenance": {
+    "layer": -1,
+    "model_family": "qwen25_vl",
+    "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "preprocessing_sha256": "89b0197600695f79dc72e49b1f25a9c8e1b039eee6e1b51be2ae8d9c4b6b86e5",
+    "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3"
+  },
+  "regression_metrics": {
+    "benign_false_positive_overlap": 0,
+    "benign_rows": 0,
+    "combined_image_led_false_negatives": 0,
+    "combined_text_led_false_negatives": 0,
+    "false_negatives": 0,
+    "false_positive_rate": 0.0,
+    "false_positives": 0,
+    "image_head_benign_false_positives": 0,
+    "image_head_image_led_false_negatives": 0,
+    "image_led_rows": 10,
+    "malicious_rows": 10,
+    "rows": 10,
+    "text_head_benign_false_positives": 0,
+    "text_head_text_led_false_negatives": 0,
+    "text_led_rows": 0,
+    "true_negatives": 0,
+    "true_positives": 10
+  },
+  "schema_version": 2,
+  "selected_candidate": {
+    "image_candidate_id": 126,
+    "image_false_positive_budget": 0,
+    "image_l2": 0.0001,
+    "image_learning_rate": 0.05,
+    "image_positive_weight": 3.0,
+    "image_threshold": 0.1690249723273814,
+    "image_unavoidable_false_positives": 0,
+    "pair_id": 22716,
+    "selected": true,
+    "text_candidate_id": 12,
+    "text_false_positive_budget": 2,
+    "text_l2": 0.1,
+    "text_learning_rate": 0.005,
+    "text_positive_weight": 1.0,
+    "text_threshold": 0.9975257227486033,
+    "text_unavoidable_false_positives": 0,
+    "validation_auprc": 1.0,
+    "validation_auroc": 1.0,
+    "validation_benign_false_positive_overlap": 0,
+    "validation_f1": 1.0,
+    "validation_false_negatives": 0,
+    "validation_false_positive_rate": 0.0,
+    "validation_false_positives": 0,
+    "validation_feasible": true,
+    "validation_image_head_benign_false_positives": 0,
+    "validation_image_led_false_negatives": 0,
+    "validation_rank_separation": 2.9110550919665217,
+    "validation_text_head_benign_false_positives": 0,
+    "validation_text_led_false_negatives": 0,
+    "validation_worst_relevant_channel_logit_margin": 1.4555275459832613
+  },
+  "selection_rule": "Fit image heads on all train benign plus image-led malicious rows and text heads on all train benign plus text-led malicious rows. Exclude the irrelevant malicious channel. Select complete image/text pairs by validation OR behavior only: require zero relevant-channel misses and at most 2/80 combined benign false positives, then rank by fewer false positives, larger worst relevant-channel logit margin, AUPRC, AUROC, rank separation, and deterministic hyperparameter tie-breakers. Internal test and prior regression are pass/fail qualification only.",
+  "target": "qwen25vl3b",
+  "test_metrics": {
+    "benign_false_positive_overlap": 0,
+    "benign_rows": 80,
+    "combined_image_led_false_negatives": 0,
+    "combined_text_led_false_negatives": 0,
+    "false_negatives": 0,
+    "false_positive_rate": 0.0125,
+    "false_positives": 1,
+    "image_head_benign_false_positives": 1,
+    "image_head_image_led_false_negatives": 0,
+    "image_led_rows": 80,
+    "malicious_rows": 100,
+    "rows": 180,
+    "text_head_benign_false_positives": 0,
+    "text_head_text_led_false_negatives": 0,
+    "text_led_rows": 20,
+    "true_negatives": 79,
+    "true_positives": 100
+  },
+  "training_configuration": {
+    "artifact_source_overrides": null,
+    "artifact_source_policy": "canonical_training_identity",
+    "classifier_grid": {
+      "epochs": 600,
+      "image_positive_weights": [
+        0.75,
+        1.0,
+        1.1,
+        1.25,
+        1.5,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "l2_values": [
+        0.0001,
+        0.0003,
+        0.001,
+        0.01,
+        0.1
+      ],
+      "learning_rates": [
+        0.005,
+        0.01,
+        0.02,
+        0.05
+      ],
+      "random_seed": 42,
+      "standardize": true,
+      "text_positive_weights": [
+        1.0,
+        2.0,
+        4.0
+      ]
+    },
+    "frozen_panels_are_excluded": true,
+    "internal_test_is_post_selection_qualification_only": true,
+    "mode": "dual_or",
+    "prior_regression_is_post_selection_qualification_only": true,
+    "representations": {
+      "image": "image_tokens",
+      "text": "text_tokens"
+    },
+    "sample_weights": {
+      "counterfactual_paired_benign": 2.0,
+      "hard_negative_benign": 3.5,
+      "ordinary_benign": 1.0
+    },
+    "schema_version": 1,
+    "selection_uses_validation_only": true,
+    "threshold_budget_allocations": [
+      [
+        0,
+        2
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        0
+      ]
+    ]
+  },
+  "training_identity": {
+    "schema_version": 1,
+    "sha256": "3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+  },
+  "validation_metrics": {
+    "benign_false_positive_overlap": 0,
+    "benign_rows": 80,
+    "combined_image_led_false_negatives": 0,
+    "combined_text_led_false_negatives": 0,
+    "false_negatives": 0,
+    "false_positive_rate": 0.0,
+    "false_positives": 0,
+    "image_head_benign_false_positives": 0,
+    "image_head_image_led_false_negatives": 0,
+    "image_led_rows": 80,
+    "malicious_rows": 100,
+    "rows": 180,
+    "text_head_benign_false_positives": 0,
+    "text_head_text_led_false_negatives": 0,
+    "text_led_rows": 20,
+    "true_negatives": 80,
+    "true_positives": 100
+  }
+}

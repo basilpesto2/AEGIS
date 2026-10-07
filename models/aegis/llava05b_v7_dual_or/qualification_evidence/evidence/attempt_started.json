@@ -1,0 +1,9 @@
+{
+  "evaluator_sha256": "75058c68703a431e64a98d083226cc9eb455ab1fd8dc39b1643cce3de918fc8c",
+  "execution_ordinal": 1,
+  "protocol_id": "llava-schema4-dual-head-frozen-once-v1",
+  "protocol_sha256": "543117735eec4eef6aef472e31e9e4db2b9baf4b4bb8963a6e3340cfc0e518c5",
+  "retries_permitted": false,
+  "schema_version": 1,
+  "started_utc": "2026-08-29T17:37:34.989278+00:00"
+}

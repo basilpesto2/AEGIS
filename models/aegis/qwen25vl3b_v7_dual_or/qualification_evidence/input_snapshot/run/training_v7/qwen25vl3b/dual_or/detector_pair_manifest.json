@@ -1,0 +1,91 @@
+{
+  "artifacts": {
+    "image": {
+      "block_threshold": 0.1690249723273814,
+      "feature_dim": 2048,
+      "format": "AEGIS DetectorArtifact NPZ version 1",
+      "name": "image",
+      "path": "qwen25vl3b_image_head_v1.npz",
+      "pooling": "image_tokens",
+      "review_threshold": 0.1490249723273814,
+      "sha256": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+      "source": "bordair_ocr_multichannel_counterfactual_v7_ffd961e91771_qwen25vl3b_image_tokens_cfgcand-3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+    },
+    "text": {
+      "block_threshold": 0.9975257227486033,
+      "feature_dim": 2048,
+      "format": "AEGIS DetectorArtifact NPZ version 1",
+      "name": "text",
+      "path": "qwen25vl3b_text_head_v1.npz",
+      "pooling": "text_tokens",
+      "review_threshold": 0.9775257227486033,
+      "sha256": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8",
+      "source": "bordair_ocr_multichannel_counterfactual_v7_ffd961e91771_qwen25vl3b_text_tokens_cfgcand-3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+    }
+  },
+  "cache_representation": {
+    "feature_dim": 4096,
+    "ordering": [
+      "text_tokens",
+      "image_tokens"
+    ],
+    "pooling": "text_image_tokens"
+  },
+  "composition": "or",
+  "corpus": {
+    "development_metadata_sha256": "d8efb9365fa61be66dcda3400b621cce42aa03e61c3f7a080a0ec8c5db456b49",
+    "manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+    "regression_metadata_sha256": "f6c06498c9aa4f21bc6520474bb5de2d9a0d47912ad0a1ed482dba4135628a8a",
+    "version": "bordair_ocr_multichannel_counterfactual_v7"
+  },
+  "development_qualification_evidence": {
+    "artifact_sha256": {
+      "image": "e17eff8de97b45c22887139417d84bdd32ed067c9615c0d601f9af4467b18deb",
+      "text": "8818a75eb0fbe9fb1a0acb9f2035cb8b9f48f083ea1ee7aee03e15ec549533c8"
+    },
+    "corpus": {
+      "development_metadata_sha256": "d8efb9365fa61be66dcda3400b621cce42aa03e61c3f7a080a0ec8c5db456b49",
+      "manifest_sha256": "ffd961e91771ec95b2781a66c8992fd0edafe94dfaf61f5fe4062dde02127220",
+      "regression_metadata_sha256": "f6c06498c9aa4f21bc6520474bb5de2d9a0d47912ad0a1ed482dba4135628a8a"
+    },
+    "feature_snapshot": {
+      "bytes": 3136038,
+      "path": "qualification_features_v1.npz",
+      "sha256": "e21ef2d28b799e0c381f12eb0015c984b72fff284e7d58dd5e5102ec6d517098"
+    },
+    "predictions": {
+      "internal_test": {
+        "path": "internal_test_predictions.csv",
+        "rows": 180,
+        "sha256": "f6206d3318ed67cf79f1f4ef2f6525b2f8a6f12f56195cb0755ab7bafaf645da"
+      },
+      "prior_regression": {
+        "path": "prior_regression_predictions.csv",
+        "rows": 10,
+        "sha256": "bdf24069593a3fe41d65847c03319eb5081f0e0eb669c2f24187a55806d6dabe"
+      },
+      "validation": {
+        "path": "validation_predictions.csv",
+        "rows": 180,
+        "sha256": "c1520ca23d40060796e2fa10b5f279210a99e994aec088a09ee22b59a7a31d05"
+      }
+    },
+    "schema_version": 1
+  },
+  "kind": "aegis_detector_pair",
+  "pair_identity_sha256": "b6433ce4d465a1d2ca45abe1317f917231312be9bbc23d623b3ed2bb94c6c630",
+  "qualification_evidence": null,
+  "runtime_detector_identity_sha256": "960f53c6fa3e584bfd2ff16a6ec3cd2d54f592e640e32da55748c2b8facd3a8e",
+  "schema_version": 1,
+  "shared_provenance": {
+    "base_feature_dim": 2048,
+    "layer": -1,
+    "model_family": "qwen25_vl",
+    "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+    "model_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3",
+    "preprocessing_sha256": "89b0197600695f79dc72e49b1f25a9c8e1b039eee6e1b51be2ae8d9c4b6b86e5",
+    "tokenizer_revision": "66285546d2b821cf421d4f5eb2576359d3770cd3"
+  },
+  "target": "qwen25vl3b",
+  "training_identity_sha256": "3d868f547fe305c723a479d277d81a6f1d12faec3586b99991d2d32db375941f"
+}
